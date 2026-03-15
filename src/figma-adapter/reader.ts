@@ -72,6 +72,15 @@ function toCamelCase(str: string): string {
     .join("");
 }
 
+/**
+ * Detect if a Figma variant is actually a boolean encoded as "true"/"false" strings.
+ */
+function isBooleanLikeVariant(values: string[]): boolean {
+  if (values.length !== 2) return false;
+  const sorted = [...values].map((v) => v.toLowerCase()).sort();
+  return sorted[0] === "false" && sorted[1] === "true";
+}
+
 // ---------------------------------------------------------------------------
 // Component set → Schema conversion
 // ---------------------------------------------------------------------------
@@ -94,11 +103,33 @@ export function figmaComponentSetToSchema(
 
     switch (def.type) {
       case "VARIANT": {
-        variants.push({
-          name,
-          values: def.variantOptions ?? [],
-          defaultValue: typeof def.defaultValue === "string" ? def.defaultValue : undefined,
-        });
+        const values = def.variantOptions ?? [];
+        const isBooleanVariant = isBooleanLikeVariant(values);
+
+        if (isBooleanVariant) {
+          // Figma variant with "true"/"false" values → boolean prop or state
+          const defaultBool = def.defaultValue === "true";
+          const lowerName = name.toLowerCase();
+          const isState = ["disabled", "loading", "active", "selected", "checked",
+            "focused", "open", "expanded", "pressed", "error"].includes(lowerName);
+
+          if (isState) {
+            states.push({ name: lowerName });
+          } else {
+            props.push({
+              name,
+              type: "boolean",
+              required: false,
+              defaultValue: defaultBool,
+            });
+          }
+        } else {
+          variants.push({
+            name,
+            values,
+            defaultValue: typeof def.defaultValue === "string" ? def.defaultValue : undefined,
+          });
+        }
         break;
       }
 

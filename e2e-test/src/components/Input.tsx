@@ -13,7 +13,7 @@ interface InputProps {
 
 export function Input({
   placeholder = "Placeholder Text",
-  size = "md",
+  size = "sm",
   variant = "Outlined",
   disabled = false,
   error = false,

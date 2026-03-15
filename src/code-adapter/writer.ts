@@ -53,6 +53,82 @@ function createWriteProject(tsConfigPath?: string): Project {
 }
 
 // ---------------------------------------------------------------------------
+// Change preprocessing — detect slot↔prop conversions
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect paired add+remove on the same field name across prop/slot targets.
+ * Convert them to "modified" type changes instead.
+ *
+ * Example: "removed slot children" + "added prop children" → modify type from ReactNode to string.
+ */
+function preprocessConversions(changes: SchemaChange[]): SchemaChange[] {
+  const result: SchemaChange[] = [];
+  const addedByName = new Map<string, SchemaChange>();
+  const removedByName = new Map<string, SchemaChange>();
+
+  // Index adds and removes by field name
+  for (const change of changes) {
+    const pathParts = change.fieldPath.split(".");
+    const fieldName = pathParts[1];
+    if (!fieldName) continue;
+
+    if (change.changeType === "added" && (change.target === "prop" || change.target === "slot")) {
+      addedByName.set(`${change.componentName}::${fieldName}`, change);
+    }
+    if (change.changeType === "removed" && (change.target === "prop" || change.target === "slot")) {
+      removedByName.set(`${change.componentName}::${fieldName}`, change);
+    }
+  }
+
+  // Find conversions
+  const conversions = new Set<string>();
+  for (const key of addedByName.keys()) {
+    if (removedByName.has(key)) {
+      conversions.add(key);
+    }
+  }
+
+  // Build result: skip paired add/remove, emit type change instead
+  for (const change of changes) {
+    const pathParts = change.fieldPath.split(".");
+    const fieldName = pathParts[1];
+    const key = `${change.componentName}::${fieldName}`;
+
+    if (conversions.has(key)) {
+      if (change.changeType === "removed") {
+        // Skip the remove — the add will handle the conversion
+        continue;
+      }
+      if (change.changeType === "added") {
+        // Convert to a "modify type" change — the prop already exists in the interface
+        // with a different type. We change the type instead of add+remove.
+        const addedTarget = change.target;
+        const newType = addedTarget === "slot" ? "ReactNode"
+          : addedTarget === "prop" ? propToTypeString(
+              (change.after as Prop) ?? { type: "string" } as Prop,
+              "prop",
+            )
+          : "unknown";
+        result.push({
+          ...change,
+          target: "prop",
+          changeType: "modified",
+          fieldPath: `props.${fieldName}.type`,
+          after: newType,
+          description: change.description.replace("Added", "Converted"),
+        });
+        continue;
+      }
+    }
+
+    result.push(change);
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Props interface finder
 // ---------------------------------------------------------------------------
 
@@ -442,10 +518,13 @@ function applyChangesToFile(
   const iface = propsDecl as InterfaceDeclaration;
   let needsReactNodeImport = false;
 
+  // Pre-process: detect slot↔prop conversions (same name, one added + one removed)
+  const processedChanges = preprocessConversions(changes);
+
   // Track destructuring updates to apply after interface changes
   const destructuringOps: Array<{ type: "add" | "remove" | "updateDefault"; name: string; defaultValue?: string }> = [];
 
-  for (const change of changes) {
+  for (const change of processedChanges) {
     const applied = applyChange(sourceFile, iface, change, targetSchema, destructuringOps);
     if (applied) {
       appliedChanges.push(change.description);
@@ -556,6 +635,14 @@ function applyChange(
         const subField = pathParts[2];
         if (subField === "values" && Array.isArray(change.after)) {
           return updateVariantValues(iface, fieldName, change.after as string[]);
+        }
+        if (subField === "defaultValue" && change.after !== undefined) {
+          destructuringOps.push({
+            type: "updateDefault",
+            name: fieldName,
+            defaultValue: quoteIfString(change.after),
+          });
+          return true;
         }
       }
       return false;

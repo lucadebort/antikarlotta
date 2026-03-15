@@ -1,6 +1,8 @@
 import { ReactNode } from "react";
 
 interface ButtonProps {
+  /** Button content */
+  children: string;
   /** Visual action */
   action?: "primary" | "secondary" | "positive" | "negative";
   /** Size preset */
@@ -18,8 +20,9 @@ interface ButtonProps {
 }
 
 export function Button({
+  children,
   action = "primary",
-  size = "md",
+  size = "xs",
   variant = "Solid",
   disabled = false,
   focused = false,

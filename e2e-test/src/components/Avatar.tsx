@@ -1,14 +1,17 @@
 interface AvatarProps {
   /** Size preset */
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+  /** Show notification badge */
+  badge?: boolean;
   /** Display variant */
   variant?: "Text" | "Image";
-    badge?: "false" | "true";
 }
 
 export function Avatar({
-  size = "md",
-  variant = "Image", badge = "true" }: AvatarProps) {
+  size = "xs",
+  badge = true,
+  variant = "Image",
+  }: AvatarProps) {
   return (
     <div>
       {variant === "Image" && src ? (
