@@ -1,9 +1,9 @@
 /**
  * Figma client — wraps the Figma REST API for component and variable reads.
  *
- * The MCP server is used by the AI agent at design-to-code time.
- * This client is for the CLI's direct reads — it calls the Figma REST API
- * to get component definitions and variables without needing MCP.
+ * Uses GET /files/:key/components for published library components,
+ * then groups them by containingComponentSet and fetches property
+ * definitions from the node tree.
  */
 
 import type {
@@ -49,25 +49,30 @@ async function figmaFetch<T>(
 }
 
 // ---------------------------------------------------------------------------
-// API response types (raw Figma shapes)
+// API response types
 // ---------------------------------------------------------------------------
+
+interface FigmaPublishedComponent {
+  key: string;
+  file_key: string;
+  node_id: string;
+  name: string;
+  description: string;
+  containing_frame: {
+    name: string;
+    nodeId: string;
+    pageId: string;
+    pageName: string;
+    containingComponentSet?: {
+      name: string;
+      nodeId: string;
+    };
+  };
+}
 
 interface FigmaFileComponentsResponse {
   meta: {
-    components: Array<{
-      key: string;
-      name: string;
-      description: string;
-      node_id: string;
-      component_set_id: string | null;
-      containing_frame: { nodeId: string; name: string };
-    }>;
-    component_sets: Array<{
-      key: string;
-      name: string;
-      description: string;
-      node_id: string;
-    }>;
+    components: FigmaPublishedComponent[];
   };
 }
 
@@ -84,7 +89,6 @@ interface FigmaFileNodesResponse {
           id: string;
           name: string;
           type: string;
-          componentPropertyDefinitions?: Record<string, FigmaComponentProperty>;
         }>;
       };
     }
@@ -117,7 +121,10 @@ interface FigmaVariablesResponse {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch all components and component sets from a Figma file.
+ * Fetch all published components from a Figma file, grouped into component sets.
+ *
+ * Groups components by their containingComponentSet, then fetches property
+ * definitions from the component set nodes.
  */
 export async function fetchComponents(
   config: FigmaAdapterConfig,
@@ -125,58 +132,81 @@ export async function fetchComponents(
   const token = getToken(config);
   const { fileKey } = config;
 
-  // Get file components metadata
+  // Step 1: Get all published components
   const meta = await figmaFetch<FigmaFileComponentsResponse>(
     `/files/${fileKey}/components`,
     token,
   );
 
-  const components: FigmaComponent[] = meta.meta.components.map((c) => ({
+  const allComponents: FigmaComponent[] = meta.meta.components.map((c) => ({
     key: c.key,
     name: c.name,
     description: c.description,
     nodeId: c.node_id,
-    componentSetId: c.component_set_id ?? undefined,
+    componentSetId: c.containing_frame?.containingComponentSet?.nodeId,
   }));
 
-  // Get component set node IDs to fetch their property definitions
-  const componentSetNodeIds = meta.meta.component_sets.map((cs) => cs.node_id);
+  // Step 2: Group components by containingComponentSet
+  const setMap = new Map<string, {
+    name: string;
+    nodeId: string;
+    components: FigmaComponent[];
+  }>();
 
-  const componentSets: FigmaComponentSet[] = [];
+  const standaloneComponents: FigmaComponent[] = [];
 
-  if (componentSetNodeIds.length > 0) {
-    // Fetch nodes in batches of 50 (Figma API limit)
-    for (let i = 0; i < componentSetNodeIds.length; i += 50) {
-      const batch = componentSetNodeIds.slice(i, i + 50);
-      const nodeIds = batch.join(",");
+  for (const comp of allComponents) {
+    const setInfo = meta.meta.components.find((c) => c.node_id === comp.nodeId)
+      ?.containing_frame?.containingComponentSet;
 
-      const nodesResponse = await figmaFetch<FigmaFileNodesResponse>(
-        `/files/${fileKey}/nodes?ids=${nodeIds}`,
-        token,
-      );
-
-      for (const csInfo of meta.meta.component_sets) {
-        const nodeData = nodesResponse.nodes[csInfo.node_id];
-        if (!nodeData) continue;
-
-        const doc = nodeData.document;
-        const variantComponents = components.filter(
-          (c) => c.componentSetId === csInfo.key || c.componentSetId === csInfo.node_id,
-        );
-
-        componentSets.push({
-          key: csInfo.key,
-          name: csInfo.name,
-          description: csInfo.description,
-          nodeId: csInfo.node_id,
-          componentPropertyDefinitions: doc.componentPropertyDefinitions ?? {},
-          variantComponents,
+    if (setInfo) {
+      const existing = setMap.get(setInfo.nodeId);
+      if (existing) {
+        existing.components.push(comp);
+      } else {
+        setMap.set(setInfo.nodeId, {
+          name: setInfo.name,
+          nodeId: setInfo.nodeId,
+          components: [comp],
         });
       }
+    } else {
+      standaloneComponents.push(comp);
     }
   }
 
-  return { componentSets, components };
+  // Step 3: Fetch component set nodes to get property definitions
+  const setNodeIds = [...setMap.keys()];
+  const componentSets: FigmaComponentSet[] = [];
+
+  for (let i = 0; i < setNodeIds.length; i += 50) {
+    const batch = setNodeIds.slice(i, i + 50);
+    const ids = batch.join(",");
+
+    const nodesResponse = await figmaFetch<FigmaFileNodesResponse>(
+      `/files/${fileKey}/nodes?ids=${ids}`,
+      token,
+    );
+
+    for (const nodeId of batch) {
+      const setInfo = setMap.get(nodeId);
+      if (!setInfo) continue;
+
+      const nodeData = nodesResponse.nodes[nodeId];
+      const propDefs = nodeData?.document?.componentPropertyDefinitions ?? {};
+
+      componentSets.push({
+        key: nodeId,
+        name: setInfo.name,
+        description: "",
+        nodeId: setInfo.nodeId,
+        componentPropertyDefinitions: propDefs,
+        variantComponents: setInfo.components,
+      });
+    }
+  }
+
+  return { componentSets, components: standaloneComponents };
 }
 
 /**

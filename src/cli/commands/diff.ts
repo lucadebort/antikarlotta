@@ -8,6 +8,8 @@ import { loadConfig } from "../../shared/config.js";
 import { loadSnapshot } from "../../diff-engine/snapshot.js";
 import { diffSchemas } from "../../diff-engine/differ.js";
 import { readCodeComponents } from "../../code-adapter/reader.js";
+import { fetchComponents } from "../../figma-adapter/client.js";
+import { figmaToSchemas } from "../../figma-adapter/reader.js";
 import { formatDiff } from "../formatters/diff-printer.js";
 
 export const diffCommand = new Command("diff")
@@ -36,8 +38,27 @@ export const diffCommand = new Command("diff")
     }
 
     if (opts.figma) {
-      // TODO: Read Figma state via MCP
-      console.log(chalk.dim("\n  Figma diff not yet available (requires MCP connection)."));
+      if (!config.figmaFileKey) {
+        console.log(chalk.red("\n  No Figma file key configured."));
+      } else {
+        try {
+          console.log(chalk.dim("  Reading Figma..."));
+          const { componentSets, components } = await fetchComponents({
+            fileKey: config.figmaFileKey,
+          });
+          const figmaSchemas = figmaToSchemas(componentSets, components);
+          let changes = diffSchemas(committed, figmaSchemas);
+
+          if (opts.component) {
+            changes = changes.filter((c) => c.componentName === opts.component);
+          }
+
+          console.log(chalk.bold("\n  Figma → Schema diff:"));
+          console.log(formatDiff(changes));
+        } catch (err) {
+          console.log(chalk.red(`\n  Could not read Figma: ${err instanceof Error ? err.message : String(err)}`));
+        }
+      }
     }
 
     console.log();
