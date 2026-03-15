@@ -13,6 +13,7 @@ import { pullCommand } from "./commands/pull.js";
 import { pushCommand } from "./commands/push.js";
 import { stageCommand } from "./commands/stage.js";
 import { resolveCommand } from "./commands/resolve.js";
+import { tokensCommand } from "./commands/tokens.js";
 
 const program = new Command()
   .name("antikarlotta")
@@ -27,5 +28,6 @@ program.addCommand(commitCommand);
 program.addCommand(pullCommand);
 program.addCommand(pushCommand);
 program.addCommand(resolveCommand);
+program.addCommand(tokensCommand);
 
 program.parse();
