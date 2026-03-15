@@ -38,7 +38,7 @@ export const statusCommand = new Command("status")
         console.log(chalk.dim("  Reading Figma..."));
         const figmaSchemas = await readFigmaSchemas(
           { fileKey: config.figmaFileKey },
-          { nameMap: config.componentNameMap },
+          { nameConfig: { nameMap: config.componentNameMap }, propertyMap: config.propertyMap },
         );
         figmaChanges = diffSchemas(committed, figmaSchemas);
       } catch (err) {

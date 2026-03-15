@@ -52,7 +52,7 @@ async function pullFromFigma(
 
   const figmaSchemas = await readFigmaSchemas(
     { fileKey: config.figmaFileKey },
-    { nameMap: config.componentNameMap },
+    { nameConfig: { nameMap: config.componentNameMap }, propertyMap: config.propertyMap },
   );
 
   let changes = diffSchemas(committed, figmaSchemas);

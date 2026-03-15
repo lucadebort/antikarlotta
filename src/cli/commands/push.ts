@@ -53,7 +53,7 @@ async function pushFigmaToCode(
   console.log(chalk.dim("  Step 1/3: Reading Figma components..."));
   const figmaSchemas = await readFigmaSchemas(
     { fileKey: config.figmaFileKey },
-    { nameMap: config.componentNameMap },
+    { nameConfig: { nameMap: config.componentNameMap }, propertyMap: config.propertyMap },
   );
 
   // Step 2: Diff Figma vs committed

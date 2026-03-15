@@ -25,6 +25,34 @@ export interface ProjectConfig {
    * e.g. { "Button ": "Button", "Fab test": "FloatingActionButton" }
    */
   componentNameMap?: Record<string, string>;
+  /**
+   * Property mapping per component: maps Figma property names to code property names.
+   * Also supports mapping Figma variants to code states and vice versa.
+   *
+   * e.g. {
+   *   "Button": {
+   *     "props": { "buttonLabel": "children", "showLabel": null },
+   *     "variantToState": { "state": { "isDisabled": "disabled", "isHovered": null } },
+   *     "ignore": ["showLabel"]
+   *   }
+   * }
+   *
+   * - props: rename Figma prop → code prop. null = ignore this prop.
+   * - variantToState: a Figma variant whose values map to code boolean states.
+   *   e.g. Figma variant "state" with value "isDisabled" → code state "disabled".
+   *   null values are ignored (e.g. "isHovered" is Figma-only, no code equivalent).
+   * - ignore: list of Figma property names to skip entirely.
+   */
+  propertyMap?: Record<string, ComponentPropertyMap>;
+}
+
+export interface ComponentPropertyMap {
+  /** Figma prop name → code prop name. null to ignore. */
+  props?: Record<string, string | null>;
+  /** Figma variant name → map of variant values to code state names. null to ignore value. */
+  variantToState?: Record<string, Record<string, string | null>>;
+  /** Figma property names to skip entirely */
+  ignore?: string[];
 }
 
 const DEFAULT_CONFIG: ProjectConfig = {
