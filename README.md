@@ -30,7 +30,7 @@ curl -o .claude/commands/gitma.md https://raw.githubusercontent.com/lucadebort/g
 curl -o ~/.claude/commands/gitma.md https://raw.githubusercontent.com/lucadebort/gitma/main/commands/gitma.md
 ```
 
-## Use (every day)
+## Use
 
 Open Figma Desktop with your file. Run the bridge plugin. Then in Claude Code:
 
@@ -38,7 +38,7 @@ Open Figma Desktop with your file. Run the bridge plugin. Then in Claude Code:
 /gitma
 ```
 
-That's it. Claude reads Figma, compares with your code, shows what's different, and asks what you want to do.
+Claude reads Figma, compares with your code, shows what's different, and asks what you want to do.
 
 ```
 Figma file: "📖 Design System" (32 components)
@@ -54,17 +54,45 @@ Code: src/components/ (18 components)
 Want me to pull from Figma, push to Figma, or show details?
 ```
 
+## Commands
+
+```
+/gitma                  → read both sides, show status, suggest actions
+/gitma status           → show sync status
+/gitma pull figma       → Figma changes → apply to code
+/gitma push code        → code changes → apply to Figma
+/gitma diff             → detailed diff both directions
+/gitma generate Badge   → generate React component from Figma (with tokens)
+/gitma preview          → generate interactive component documentation
+```
+
+## What it does
+
 ### Pull from Figma → Code
 
-"Pull from Figma" — Claude updates your TypeScript interfaces, function params, and types to match Figma. Surgical AST edits, never touches your JSX.
+Claude updates your TypeScript interfaces, function params, and types to match Figma. Surgical edits, never touches your JSX.
 
 ### Push from Code → Figma
 
-"Push to Figma" — Claude writes new props, states, and variant values directly to your Figma file via figma_execute. Including cloning variant children with correct positioning.
+Claude writes new props, states, and variant values directly to your Figma file. Including cloning variant children with correct positioning.
+
+### Generate from Figma
+
+Claude reads a component's structure, visual properties, and token bindings, then generates a complete React component with token-based styling.
+
+### Interactive preview
+
+`/gitma preview` generates a self-contained HTML page with all your components:
+
+- **Component list** with navigation
+- **Live preview** with interactive controls (variant chips, boolean toggles, text inputs, icon swap grids)
+- **Inspect panel** showing Design, Layout, and CSS with Figma token references
+- **Code dock** with copyable React JSX
+- **Figma link** per component to jump to the source
 
 ## What you need
 
-- [Claude Code](https://claude.ai/claude-code)
+- [Claude Code](https://claude.ai/claude-code) with figma-console MCP server
 - Figma Desktop with the bridge plugin
 - React/TypeScript components
 
@@ -101,8 +129,6 @@ On first run, `/gitma` creates `.gitma/config.json`:
 
 ### Name mapping
 
-When Figma and code name things differently:
-
 ```json
 {
   "componentNameMap": {
@@ -113,8 +139,6 @@ When Figma and code name things differently:
 ```
 
 ### Property mapping
-
-When Figma properties don't match code props 1:1:
 
 ```json
 {
@@ -127,16 +151,6 @@ When Figma properties don't match code props 1:1:
     }
   }
 }
-```
-
-## Commands
-
-```
-/gitma              → read both sides, show status, suggest actions
-/gitma status       → show sync status
-/gitma pull figma   → Figma changes → apply to code
-/gitma push code    → code changes → apply to Figma
-/gitma diff         → detailed diff both directions
 ```
 
 ## License
