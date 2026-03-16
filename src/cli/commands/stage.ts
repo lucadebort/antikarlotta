@@ -1,11 +1,11 @@
 /**
  * stage command — selectively stage changes for commit.
  *
- * antikarlotta stage --all          → stage everything
- * antikarlotta stage Button         → stage all changes for Button
- * antikarlotta stage Button.props.size → stage a specific change
- * antikarlotta stage --clear        → unstage everything
- * antikarlotta stage --list         → show staged changes
+ * gitma stage --all          → stage everything
+ * gitma stage Button         → stage all changes for Button
+ * gitma stage Button.props.size → stage a specific change
+ * gitma stage --clear        → unstage everything
+ * gitma stage --list         → show staged changes
  */
 
 import { Command } from "commander";

@@ -19,7 +19,7 @@ import {
 let testDir: string;
 
 beforeEach(() => {
-  testDir = join(tmpdir(), `antikarlotta-test-${Date.now()}`);
+  testDir = join(tmpdir(), `gitma-test-${Date.now()}`);
   mkdirSync(testDir, { recursive: true });
 });
 
@@ -109,7 +109,7 @@ describe("staging", () => {
   });
 
   it("getStagedChanges returns empty when no staging dir", () => {
-    const emptyDir = join(tmpdir(), `antikarlotta-empty-${Date.now()}`);
+    const emptyDir = join(tmpdir(), `gitma-empty-${Date.now()}`);
     mkdirSync(emptyDir, { recursive: true });
 
     expect(getStagedChanges(emptyDir)).toHaveLength(0);

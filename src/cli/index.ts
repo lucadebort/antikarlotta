@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * antikarlotta CLI — bidirectional Figma-code sync.
+ * gitma CLI — bidirectional Figma-code sync.
  */
 
 import { config } from "dotenv";
@@ -19,7 +19,7 @@ import { resolveCommand } from "./commands/resolve.js";
 import { tokensCommand } from "./commands/tokens.js";
 
 const program = new Command()
-  .name("antikarlotta")
+  .name("gitma")
   .description("Bidirectional Figma-code sync with a canonical component schema")
   .version("0.1.0");
 

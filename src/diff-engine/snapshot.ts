@@ -1,5 +1,5 @@
 /**
- * Snapshot storage — persist schema states in .antikarlotta/snapshots/.
+ * Snapshot storage — persist schema states in .gitma/snapshots/.
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
@@ -8,7 +8,7 @@ import type { ComponentSchema } from "../schema/types.js";
 import { serializeSchema, deserializeSchema } from "../schema/serialize.js";
 import type { ComponentSchemaFile, SchemaSource } from "../schema/types.js";
 
-const SNAPSHOTS_DIR = ".antikarlotta/snapshots";
+const SNAPSHOTS_DIR = ".gitma/snapshots";
 
 export type SnapshotName = "figma" | "code" | "committed";
 

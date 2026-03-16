@@ -1,11 +1,11 @@
 /**
- * Project configuration — reads .antikarlotta/config.json
+ * Project configuration — reads .gitma/config.json
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-const CONFIG_DIR = ".antikarlotta";
+const CONFIG_DIR = ".gitma";
 const CONFIG_FILE = "config.json";
 
 export interface ProjectConfig {

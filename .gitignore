@@ -3,9 +3,9 @@ dist/
 *.tsbuildinfo
 
 # Local sync state (snapshots are ephemeral, config is committed)
-.antikarlotta/snapshots/
-.antikarlotta/staging/
-.antikarlotta/backups/
+.gitma/snapshots/
+.gitma/staging/
+.gitma/backups/
 
 # SuperSkills
 .superskills/

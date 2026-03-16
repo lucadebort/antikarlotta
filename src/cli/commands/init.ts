@@ -1,5 +1,5 @@
 /**
- * init command — set up .antikarlotta/ in a project.
+ * init command — set up .gitma/ in a project.
  */
 
 import { Command } from "commander";
@@ -8,7 +8,7 @@ import { saveConfig, type ProjectConfig } from "../../shared/config.js";
 import { saveSnapshot } from "../../diff-engine/snapshot.js";
 
 export const initCommand = new Command("init")
-  .description("Initialize antikarlotta in the current project")
+  .description("Initialize gitma in the current project")
   .option("--figma-key <key>", "Figma file key")
   .option("--globs <patterns...>", "Component file glob patterns", ["src/components/**/*.tsx"])
   .option("--token-file <path>", "Path to .tokens.json file")
@@ -28,8 +28,8 @@ export const initCommand = new Command("init")
     // Create empty committed snapshot as baseline
     saveSnapshot(projectRoot, "committed", [], "manual");
 
-    console.log(chalk.green("\n  Initialized antikarlotta.\n"));
-    console.log(chalk.dim("  Created .antikarlotta/config.json"));
-    console.log(chalk.dim("  Created .antikarlotta/snapshots/committed.json\n"));
-    console.log(`  Next: run ${chalk.bold("antikarlotta status")} to see component drift.\n`);
+    console.log(chalk.green("\n  Initialized gitma.\n"));
+    console.log(chalk.dim("  Created .gitma/config.json"));
+    console.log(chalk.dim("  Created .gitma/snapshots/committed.json\n"));
+    console.log(`  Next: run ${chalk.bold("gitma status")} to see component drift.\n`);
   });

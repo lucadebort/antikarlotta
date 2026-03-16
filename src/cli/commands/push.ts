@@ -1,8 +1,8 @@
 /**
  * push command — read from one side, commit to schema, then apply to the other.
  *
- * antikarlotta push figma-to-code  → read Figma → commit → apply to code
- * antikarlotta push code-to-figma  → read code → commit → (apply to Figma — future)
+ * gitma push figma-to-code  → read Figma → commit → apply to code
+ * gitma push code-to-figma  → read code → commit → (apply to Figma — future)
  */
 
 import { Command } from "commander";
@@ -45,7 +45,7 @@ async function pushFigmaToCode(
   opts: { apply?: boolean; component?: string },
 ) {
   if (!config.figmaFileKey) {
-    console.log(chalk.red("  No Figma file key configured. Run `antikarlotta init --figma-key <key>`."));
+    console.log(chalk.red("  No Figma file key configured. Run `gitma init --figma-key <key>`."));
     process.exit(1);
   }
 

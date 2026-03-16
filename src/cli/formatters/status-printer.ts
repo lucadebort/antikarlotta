@@ -14,7 +14,7 @@ export interface StatusSummary {
 export function formatStatus(status: StatusSummary): string {
   const lines: string[] = [];
 
-  lines.push(chalk.bold("\n  antikarlotta status\n"));
+  lines.push(chalk.bold("\n  gitma status\n"));
 
   // Synced components
   if (status.synced.length > 0) {
@@ -50,7 +50,7 @@ export function formatStatus(status: StatusSummary): string {
   }
 
   if (status.figmaChanges.length === 0 && status.codeChanges.length === 0 && status.synced.length === 0) {
-    lines.push(chalk.dim("  No components tracked. Run `antikarlotta init` to get started."));
+    lines.push(chalk.dim("  No components tracked. Run `gitma init` to get started."));
   }
 
   lines.push("");

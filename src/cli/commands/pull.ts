@@ -1,8 +1,8 @@
 /**
  * pull command — apply committed schema changes to code or Figma.
  *
- * antikarlotta pull figma  → read Figma, diff against committed, show changes
- * antikarlotta pull code   → apply committed schema to code files
+ * gitma pull figma  → read Figma, diff against committed, show changes
+ * gitma pull code   → apply committed schema to code files
  */
 
 import { Command } from "commander";
@@ -44,7 +44,7 @@ async function pullFromFigma(
   opts: { apply?: boolean; component?: string },
 ) {
   if (!config.figmaFileKey) {
-    console.log(chalk.red("  No Figma file key configured. Run `antikarlotta init --figma-key <key>`."));
+    console.log(chalk.red("  No Figma file key configured. Run `gitma init --figma-key <key>`."));
     process.exit(1);
   }
 

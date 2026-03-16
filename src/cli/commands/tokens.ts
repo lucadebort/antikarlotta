@@ -1,10 +1,10 @@
 /**
  * tokens command — sync W3C Design Tokens between .tokens.json and Figma variables.
  *
- * antikarlotta tokens status             → show token drift
- * antikarlotta tokens pull figma         → Figma variables → .tokens.json
- * antikarlotta tokens push figma         → .tokens.json → Figma variables
- * antikarlotta tokens validate           → validate .tokens.json against W3C spec
+ * gitma tokens status             → show token drift
+ * gitma tokens pull figma         → Figma variables → .tokens.json
+ * gitma tokens push figma         → .tokens.json → Figma variables
+ * gitma tokens validate           → validate .tokens.json against W3C spec
  */
 
 import { Command } from "commander";
@@ -55,7 +55,7 @@ tokensCommand
 
     if (!tokenFile) {
       console.log(chalk.dim(`\n  No token file found at ${tokenPath}.`));
-      console.log(chalk.dim(`  Create one or set tokenFile in .antikarlotta/config.json.\n`));
+      console.log(chalk.dim(`  Create one or set tokenFile in .gitma/config.json.\n`));
       return;
     }
 

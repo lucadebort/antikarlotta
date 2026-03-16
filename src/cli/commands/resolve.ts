@@ -26,7 +26,7 @@ export const resolveCommand = new Command("resolve")
     const codeComponents = readCodeComponents(projectRoot, config.componentGlobs);
 
     if (!figmaSnapshot) {
-      console.log(chalk.dim("\n  No Figma snapshot found. Run `antikarlotta pull figma` first.\n"));
+      console.log(chalk.dim("\n  No Figma snapshot found. Run `gitma pull figma` first.\n"));
       return;
     }
 
@@ -37,7 +37,7 @@ export const resolveCommand = new Command("resolve")
 
       if (merged.length > 0) {
         console.log(chalk.dim(`  ${merged.length} non-conflicting change(s) ready to commit.`));
-        console.log(chalk.dim("  Run `antikarlotta commit` to apply.\n"));
+        console.log(chalk.dim("  Run `gitma commit` to apply.\n"));
       }
       return;
     }
@@ -62,7 +62,7 @@ export const resolveCommand = new Command("resolve")
       console.log(chalk.green(`  Resolved ${conflicts.length} conflict(s). Schema updated from ${opts.take}.\n`));
     } else {
       console.log(chalk.dim("\n  To auto-resolve, run:"));
-      console.log(chalk.dim("    antikarlotta resolve --take figma   (take all Figma versions)"));
-      console.log(chalk.dim("    antikarlotta resolve --take code    (take all code versions)\n"));
+      console.log(chalk.dim("    gitma resolve --take figma   (take all Figma versions)"));
+      console.log(chalk.dim("    gitma resolve --take code    (take all code versions)\n"));
     }
   });

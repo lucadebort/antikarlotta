@@ -1,10 +1,10 @@
 {
-  "name": "antikarlotta",
+  "name": "gitma",
   "version": "0.1.0",
   "description": "Bidirectional Figma-code sync with a canonical component schema",
   "type": "module",
   "bin": {
-    "antikarlotta": "./dist/cli/index.js"
+    "gitma": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc",

@@ -1,14 +1,14 @@
 /**
  * Staging area — stage specific changes before committing.
  *
- * Staged changes are stored as JSON in .antikarlotta/staging/
+ * Staged changes are stored as JSON in .gitma/staging/
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { SchemaChange } from "./types.js";
 
-const STAGING_DIR = ".antikarlotta/staging";
+const STAGING_DIR = ".gitma/staging";
 
 function stagingDir(projectRoot: string): string {
   return join(projectRoot, STAGING_DIR);
