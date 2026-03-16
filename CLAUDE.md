@@ -9,7 +9,7 @@
 **Need:** Any change to design or code is detected, compared against a shared truth, and either synced or flagged for review — drift becomes impossible
 
 ## Stack
-Node.js + TypeScript (CLI tool), ts-morph (AST), figma-console-mcp (Desktop Bridge), Vitest
+Node.js + TypeScript (CLI tool), ts-morph (AST), figma-console MCP (via Claude Code), Vitest
 
 ## EIID
 
