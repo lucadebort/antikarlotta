@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Badge — Figma → Code Preview</title>
+<style>
+  :root {
+    --color-error-background: #FEF1F1; --color-error-800: #991B1B; --color-error-300: #F87171;
+    --color-warning-background: #FFF3EA; --color-warning-800: #824417; --color-warning-300: #FDBA74;
+    --color-success-background: #EDFCF2; --color-success-800: #166534; --color-success-300: #6EE7B7;
+    --color-info-background: #EBF8FE; --color-info-800: #075A83; --color-info-300: #7DD3FC;
+    --color-background-muted: #F7F8F7; --color-background-800: #414040; --color-background-300: #D4D4D4;
+    --spacing-1: 4px; --spacing-2: 8px; --radius-xs: 2px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #1a1a1a; }
+
+  /* Layout */
+  .app { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
+  .sidebar { background: #fff; border-right: 1px solid #e5e5e5; padding: 24px; overflow-y: auto; }
+  .main { padding: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+  /* Sidebar */
+  .sidebar h1 { font-size: 18px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #999; margin-bottom: 24px; }
+  .control { margin-bottom: 20px; }
+  .control label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #666; margin-bottom: 6px; }
+  .control input[type="text"] {
+    width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;
+    outline: none; transition: border-color 0.15s;
+  }
+  .control input[type="text"]:focus { border-color: #999; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip {
+    padding: 4px 10px; border-radius: 100px; font-size: 12px; border: 1px solid #ddd;
+    background: #fff; cursor: pointer; transition: all 0.15s; user-select: none;
+  }
+  .chip:hover { border-color: #999; }
+  .chip.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+
+  .toggle-row { display: flex; align-items: center; gap: 8px; }
+  .toggle {
+    width: 36px; height: 20px; border-radius: 10px; background: #ddd; cursor: pointer;
+    position: relative; transition: background 0.15s;
+  }
+  .toggle.active { background: #1a1a1a; }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%; background: #fff;
+    transition: transform 0.15s;
+  }
+  .toggle.active::after { transform: translateX(16px); }
+  .toggle-label { font-size: 13px; }
+
+  .divider { border: none; border-top: 1px solid #eee; margin: 20px 0; }
+
+  /* Preview area */
+  .preview-card {
+    background: #fff; border-radius: 12px; padding: 48px 64px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    display: flex; flex-direction: column; align-items: center; gap: 24px; min-width: 300px;
+  }
+  .preview-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* Code panel */
+  .code-panel {
+    margin-top: 32px; background: #1a1a1a; color: #e5e5e5; border-radius: 10px;
+    padding: 20px 24px; font-family: "SF Mono", "Fira Code", monospace; font-size: 12px;
+    line-height: 1.6; max-width: 600px; width: 100%; overflow-x: auto; white-space: pre;
+  }
+  .code-panel .kw { color: #c792ea; }
+  .code-panel .str { color: #c3e88d; }
+  .code-panel .comp { color: #82aaff; }
+  .code-panel .prop { color: #f78c6c; }
+  .code-panel .tag { color: #89ddff; }
+
+  /* Badge component */
+  .badge {
+    display: inline-flex; align-items: center;
+    gap: var(--spacing-1); padding-block: var(--spacing-1); padding-inline: var(--spacing-2);
+    border-radius: var(--radius-xs); font-family: Roboto, sans-serif; font-weight: 400;
+    line-height: 1.4; border: none; white-space: nowrap; transition: all 0.2s;
+  }
+  .badge--sm { font-size: 10px; }
+  .badge--md { font-size: 12px; }
+  .badge--lg { font-size: 14px; }
+  .badge--xl { font-size: 16px; }
+  .badge--sm .badge__icon { width: 12px; height: 12px; }
+  .badge--md .badge__icon { width: 14px; height: 14px; }
+  .badge--lg .badge__icon { width: 16px; height: 16px; }
+  .badge--xl .badge__icon { width: 18px; height: 18px; }
+  .badge__icon { display: flex; align-items: center; justify-content: center; }
+  .badge__icon svg { width: 100%; height: 100%; }
+  .badge--error { background: var(--color-error-background); color: var(--color-error-800); }
+  .badge--error.badge--outlined { border: 1px solid var(--color-error-300); }
+  .badge--warning { background: var(--color-warning-background); color: var(--color-warning-800); }
+  .badge--warning.badge--outlined { border: 1px solid var(--color-warning-300); }
+  .badge--success { background: var(--color-success-background); color: var(--color-success-800); }
+  .badge--success.badge--outlined { border: 1px solid var(--color-success-300); }
+  .badge--info { background: var(--color-info-background); color: var(--color-info-800); }
+  .badge--info.badge--outlined { border: 1px solid var(--color-info-300); }
+  .badge--muted { background: var(--color-background-muted); color: var(--color-background-800); }
+  .badge--muted.badge--outlined { border: 1px solid var(--color-background-300); }
+
+  /* Inspect panel */
+  .inspect {
+    margin-top: 32px; width: 100%; max-width: 600px;
+    background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+  .inspect-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; border-bottom: 1px solid #eee;
+  }
+  .inspect-header h3 { font-size: 13px; color: #999; margin: 0; }
+  .inspect-tabs { display: flex; gap: 2px; }
+  .inspect-tab {
+    padding: 4px 12px; font-size: 11px; border-radius: 6px; cursor: pointer;
+    background: transparent; color: #999; border: none; transition: all 0.15s;
+  }
+  .inspect-tab:hover { background: #f5f5f5; }
+  .inspect-tab.active { background: #1a1a1a; color: #fff; }
+  .inspect-body { padding: 16px 20px; }
+  .inspect-row {
+    display: flex; align-items: baseline; padding: 5px 0;
+    font-size: 12px; border-bottom: 1px solid #f5f5f5;
+  }
+  .inspect-row:last-child { border-bottom: none; }
+  .inspect-prop { width: 140px; color: #999; flex-shrink: 0; font-family: monospace; }
+  .inspect-value { color: #1a1a1a; font-family: monospace; }
+  .inspect-token {
+    margin-left: auto; font-size: 10px; color: #fff; background: #7c3aed;
+    padding: 1px 6px; border-radius: 3px; font-family: monospace;
+  }
+  .inspect-swatch {
+    display: inline-block; width: 12px; height: 12px; border-radius: 2px;
+    border: 1px solid rgba(0,0,0,0.1); vertical-align: middle; margin-right: 6px;
+  }
+  .inspect-section { font-size: 11px; font-weight: 600; color: #666; padding: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* Matrix */
+  .matrix { margin-top: 32px; width: 100%; max-width: 700px; }
+  .matrix h3 { font-size: 13px; color: #999; margin-bottom: 12px; text-align: center; }
+  .matrix table { border-collapse: collapse; width: 100%; }
+  .matrix th { font-size: 11px; color: #999; font-weight: 500; padding: 6px 8px; text-align: left; }
+  .matrix td { padding: 8px; }
+</style>
+</head>
+<body>
+
+<svg style="display:none">
+  <symbol id="icon-globe" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+    <circle cx="8" cy="8" r="6.5"/><path d="M1.5 8h13M8 1.5c-2 2-2 9 0 13M8 1.5c2 2 2 9 0 13"/>
+  </symbol>
+</svg>
+
+<div class="app">
+  <aside class="sidebar">
+    <h1>Badge</h1>
+    <p class="subtitle">Generated from Figma via /gitma</p>
+
+    <hr class="divider">
+
+    <div class="control">
+      <label>Label</label>
+      <input type="text" id="ctrl-label" value="NEW FEATURE">
+    </div>
+
+    <div class="control">
+      <label>Action</label>
+      <div class="chips" id="ctrl-action">
+        <div class="chip active" data-value="error">Error</div>
+        <div class="chip" data-value="warning">Warning</div>
+        <div class="chip" data-value="success">Success</div>
+        <div class="chip" data-value="info">Info</div>
+        <div class="chip" data-value="muted">Muted</div>
+      </div>
+    </div>
+
+    <div class="control">
+      <label>Size</label>
+      <div class="chips" id="ctrl-size">
+        <div class="chip" data-value="sm">sm</div>
+        <div class="chip active" data-value="md">md</div>
+        <div class="chip" data-value="lg">lg</div>
+        <div class="chip" data-value="xl">xl</div>
+      </div>
+    </div>
+
+    <div class="control">
+      <label>Variant</label>
+      <div class="chips" id="ctrl-variant">
+        <div class="chip active" data-value="solid">Solid</div>
+        <div class="chip" data-value="outlined">Outlined</div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="control">
+      <label>Options</label>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div class="toggle-row">
+          <div class="toggle active" id="ctrl-iconLeft"></div>
+          <span class="toggle-label">Icon Left</span>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle" id="ctrl-iconRight"></div>
+          <span class="toggle-label">Icon Right</span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="control">
+      <label>Figma tokens used</label>
+      <div id="tokens-list" style="font-size: 11px; color: #666; line-height: 1.8; font-family: monospace;"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="preview-card">
+      <div class="preview-label">Preview</div>
+      <div id="preview" style="min-height: 40px; display: flex; align-items: center;"></div>
+    </div>
+
+    <div class="code-panel" id="code-output"></div>
+
+    <div class="inspect" id="inspect-panel">
+      <div class="inspect-header">
+        <h3>Inspect</h3>
+        <div class="inspect-tabs">
+          <button class="inspect-tab active" data-tab="design">Design</button>
+          <button class="inspect-tab" data-tab="layout">Layout</button>
+          <button class="inspect-tab" data-tab="typography">Type</button>
+          <button class="inspect-tab" data-tab="css">CSS</button>
+        </div>
+      </div>
+      <div class="inspect-body" id="inspect-body"></div>
+    </div>
+
+    <div class="matrix">
+      <h3>All variants</h3>
+      <table>
+        <thead>
+          <tr><th></th><th>Error</th><th>Warning</th><th>Success</th><th>Info</th><th>Muted</th></tr>
+        </thead>
+        <tbody id="matrix-body"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script>
+const state = {
+  label: "NEW FEATURE",
+  action: "error",
+  size: "md",
+  variant: "solid",
+  iconLeft: true,
+  iconRight: false,
+};
+
+const iconSvg = `<span class="badge__icon"><svg><use href="#icon-globe"/></svg></span>`;
+
+const tokenMap = {
+  error: { bg: "Error/error background", text: "Error/error800", border: "Error/error300" },
+  warning: { bg: "Warning/warning background", text: "Warning/warning800", border: "Warning/warning300" },
+  success: { bg: "Success/success background", text: "Success/success800", border: "Success/success300" },
+  info: { bg: "Info/info background", text: "Info/info800", border: "Info/info300" },
+  muted: { bg: "Background/background muted", text: "Background/background800", border: "Background/background300" },
+};
+
+function renderBadge(opts = {}) {
+  const o = { ...state, ...opts };
+  const classes = `badge badge--${o.size} badge--${o.action}${o.variant === "outlined" ? " badge--outlined" : ""}`;
+  return `<span class="${classes}">${o.iconLeft ? iconSvg : ""}<span>${o.label}</span>${o.iconRight ? iconSvg : ""}</span>`;
+}
+
+function update() {
+  // Preview
+  document.getElementById("preview").innerHTML = renderBadge();
+
+  // Code
+  const props = [];
+  if (state.label !== "NEW FEATURE") props.push(`  <span class="prop">label</span>=<span class="str">"${state.label}"</span>`);
+  else props.push(`  <span class="prop">label</span>=<span class="str">"NEW FEATURE"</span>`);
+  if (state.action !== "error") props.push(`  <span class="prop">action</span>=<span class="str">"${state.action}"</span>`);
+  if (state.size !== "sm") props.push(`  <span class="prop">size</span>=<span class="str">"${state.size}"</span>`);
+  if (state.variant !== "solid") props.push(`  <span class="prop">variant</span>=<span class="str">"${state.variant}"</span>`);
+  if (!state.iconLeft) props.push(`  <span class="prop">iconLeft</span>={<span class="str">false</span>}`);
+  if (state.iconRight) props.push(`  <span class="prop">iconRight</span>={<span class="str">&lt;GlobeIcon /&gt;</span>}`);
+
+  document.getElementById("code-output").innerHTML =
+    `<span class="tag">&lt;</span><span class="comp">Badge</span>\n${props.join("\n")}\n<span class="tag">/&gt;</span>`;
+
+  // Tokens
+  const t = tokenMap[state.action];
+  let tokens = `bg: ${t.bg}\ntext: ${t.text}`;
+  if (state.variant === "outlined") tokens += `\nborder: ${t.border}`;
+  tokens += `\npadding: Spacing/1, Spacing/2\nradius: Border radius/xs`;
+  document.getElementById("tokens-list").innerText = tokens;
+
+  // Matrix
+  const actions = ["error", "warning", "success", "info", "muted"];
+  const sizes = ["sm", "md", "lg", "xl"];
+  let html = "";
+  for (const size of sizes) {
+    html += `<tr><td style="font-size:11px;color:#999;padding:6px 8px;">${size}</td>`;
+    for (const action of actions) {
+      html += `<td style="padding:6px 8px;">${renderBadge({ action, size, variant: state.variant })}</td>`;
+    }
+    html += "</tr>";
+  }
+  document.getElementById("matrix-body").innerHTML = html;
+}
+
+// Chip controls
+document.querySelectorAll(".chips").forEach(group => {
+  group.querySelectorAll(".chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      group.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      const prop = group.id.replace("ctrl-", "");
+      state[prop] = chip.dataset.value;
+      update();
+    });
+  });
+});
+
+// Toggle controls
+document.querySelectorAll(".toggle").forEach(toggle => {
+  toggle.addEventListener("click", () => {
+    toggle.classList.toggle("active");
+    const prop = toggle.id.replace("ctrl-", "");
+    state[prop] = toggle.classList.contains("active");
+    update();
+  });
+});
+
+// Text input
+document.getElementById("ctrl-label").addEventListener("input", (e) => {
+  state.label = e.target.value;
+  update();
+});
+
+// Inspect panel
+let activeTab = "design";
+
+const colorMap = {
+  error:   { bg: "#FEF1F1", text: "#991B1B", border: "#F87171" },
+  warning: { bg: "#FFF3EA", text: "#824417", border: "#FDBA74" },
+  success: { bg: "#EDFCF2", text: "#166534", border: "#6EE7B7" },
+  info:    { bg: "#EBF8FE", text: "#075A83", border: "#7DD3FC" },
+  muted:   { bg: "#F7F8F7", text: "#414040", border: "#D4D4D4" },
+};
+
+const sizeData = {
+  sm: { fontSize: 10, iconSize: 12, height: 20 },
+  md: { fontSize: 12, iconSize: 14, height: 22 },
+  lg: { fontSize: 14, iconSize: 16, height: 29 },
+  xl: { fontSize: 16, iconSize: 18, height: 34 },
+};
+
+function swatch(color) {
+  return `<span class="inspect-swatch" style="background:${color}"></span>${color}`;
+}
+
+function row(prop, value, token) {
+  return `<div class="inspect-row">
+    <span class="inspect-prop">${prop}</span>
+    <span class="inspect-value">${value}</span>
+    ${token ? `<span class="inspect-token">${token}</span>` : ""}
+  </div>`;
+}
+
+function section(title) {
+  return `<div class="inspect-section">${title}</div>`;
+}
+
+function renderInspect() {
+  const t = tokenMap[state.action];
+  const c = colorMap[state.action];
+  const s = sizeData[state.size];
+  let html = "";
+
+  if (activeTab === "design") {
+    html += section("Fill");
+    html += row("background", swatch(c.bg), t.bg);
+    html += row("color", swatch(c.text), t.text);
+    if (state.variant === "outlined") {
+      html += section("Stroke");
+      html += row("border-color", swatch(c.border), t.border);
+      html += row("border-width", "1px", "");
+    }
+    html += section("Corner");
+    html += row("border-radius", "2px", "Border radius/xs");
+  }
+
+  if (activeTab === "layout") {
+    html += section("Auto layout");
+    html += row("direction", "horizontal (row)", "");
+    html += row("gap", "4px", "Spacing/1");
+    html += section("Padding");
+    html += row("padding-top", "4px", "Spacing/1");
+    html += row("padding-right", "8px", "Spacing/2");
+    html += row("padding-bottom", "4px", "Spacing/1");
+    html += row("padding-left", "8px", "Spacing/2");
+    html += section("Dimensions");
+    html += row("height", `${s.height}px`, "");
+    html += row("align-items", "center", "");
+    if (state.iconLeft || state.iconRight) {
+      html += section("Icon");
+      html += row("icon-size", `${s.iconSize}px`, "");
+    }
+  }
+
+  if (activeTab === "typography") {
+    html += section("Text");
+    html += row("font-family", "Roboto", "");
+    html += row("font-weight", "400 (Regular)", "");
+    html += row("font-size", `${s.fontSize}px`, "");
+    html += row("line-height", "auto", "");
+    html += row("color", swatch(c.text), t.text);
+  }
+
+  if (activeTab === "css") {
+    const cssLines = [
+      `display: inline-flex;`,
+      `align-items: center;`,
+      `gap: var(--spacing-1);  /* 4px */`,
+      `padding: var(--spacing-1) var(--spacing-2);  /* 4px 8px */`,
+      `border-radius: var(--radius-xs);  /* 2px */`,
+      `background: var(--color-${state.action === "muted" ? "background-muted" : state.action + "-background"});`,
+      `color: var(--color-${state.action === "muted" ? "background" : state.action}-800);`,
+      `font-family: Roboto, sans-serif;`,
+      `font-size: ${s.fontSize}px;`,
+      `font-weight: 400;`,
+    ];
+    if (state.variant === "outlined") {
+      cssLines.push(`border: 1px solid var(--color-${state.action === "muted" ? "background" : state.action}-300);`);
+    }
+    html = `<pre style="font-size:11px;line-height:1.8;margin:0;color:#555;font-family:'SF Mono','Fira Code',monospace;">.badge--${state.action}${state.variant === "outlined" ? ".badge--outlined" : ""}.badge--${state.size} {\n  ${cssLines.join("\n  ")}\n}</pre>`;
+  }
+
+  document.getElementById("inspect-body").innerHTML = html;
+}
+
+document.querySelectorAll(".inspect-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".inspect-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    activeTab = tab.dataset.tab;
+    renderInspect();
+  });
+});
+
+// Patch update to also render inspect
+const _origUpdate = update;
+update = function() {
+  _origUpdate();
+  renderInspect();
+};
+
+update();
+</script>
+</body>
+</html>

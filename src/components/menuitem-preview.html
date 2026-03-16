@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Menu Item — Figma → Code Preview</title>
+<style>
+  :root {
+    --color-background-0: #FFFFFF;
+    --color-background-50: #F6F6F6;
+    --color-background-100: #F2F1F1;
+    --color-typography-700: #525252;
+    --color-typography-400: #A3A3A3;
+    --spacing-2: 8px;
+    --spacing-3: 12px;
+    --radius-sm: 4px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #1a1a1a; }
+
+  .app { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
+  .sidebar { background: #fff; border-right: 1px solid #e5e5e5; padding: 24px; overflow-y: auto; }
+  .main { padding: 48px; display: flex; flex-direction: column; align-items: center; }
+
+  .sidebar h1 { font-size: 18px; margin-bottom: 4px; }
+  .sidebar .subtitle { font-size: 12px; color: #999; margin-bottom: 24px; }
+  .control { margin-bottom: 20px; }
+  .control label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #666; margin-bottom: 6px; }
+  .control input[type="text"] {
+    width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none;
+  }
+  .control input[type="text"]:focus { border-color: #999; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip {
+    padding: 4px 10px; border-radius: 100px; font-size: 12px; border: 1px solid #ddd;
+    background: #fff; cursor: pointer; transition: all 0.15s; user-select: none;
+  }
+  .chip:hover { border-color: #999; }
+  .chip.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .toggle-row { display: flex; align-items: center; gap: 8px; }
+  .toggle {
+    width: 36px; height: 20px; border-radius: 10px; background: #ddd; cursor: pointer;
+    position: relative; transition: background 0.15s;
+  }
+  .toggle.active { background: #1a1a1a; }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s;
+  }
+  .toggle.active::after { transform: translateX(16px); }
+  .toggle-label { font-size: 13px; }
+  .divider { border: none; border-top: 1px solid #eee; margin: 20px 0; }
+
+  /* Icon selector */
+  .icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+  .icon-option {
+    width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid #eee; border-radius: 6px; cursor: pointer; transition: all 0.15s;
+    background: #fff;
+  }
+  .icon-option:hover { border-color: #999; background: #f9f9f9; }
+  .icon-option.active { border-color: #1a1a1a; background: #f0f0f0; }
+  .icon-option svg { width: 16px; height: 16px; }
+
+  /* Preview */
+  .preview-card {
+    background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    display: flex; flex-direction: column; gap: 4px; width: 280px;
+  }
+  .preview-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; text-align: center; }
+
+  /* Menu Item component */
+  .menu-item {
+    display: flex; align-items: center;
+    gap: var(--spacing-2); padding: var(--spacing-3);
+    border-radius: var(--radius-sm);
+    background: var(--color-background-0); color: var(--color-typography-700);
+    font-family: Roboto, sans-serif; font-weight: 400;
+    cursor: pointer; border: none; width: 100%; text-align: left;
+    transition: background-color 0.15s;
+  }
+  .menu-item:hover { background: var(--color-background-50); }
+  .menu-item:active { background: var(--color-background-100); }
+  .menu-item--disabled {
+    color: var(--color-typography-400); cursor: default; opacity: 0.7;
+  }
+  .menu-item--disabled:hover, .menu-item--disabled:active { background: var(--color-background-0); }
+  .menu-item--sm { font-size: 14px; }
+  .menu-item--md { font-size: 16px; }
+  .menu-item--right { flex-direction: row-reverse; }
+  .menu-item__icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .menu-item__icon svg { width: 100%; height: 100%; }
+
+  /* Code panel */
+  .code-panel {
+    margin-top: 24px; background: #1a1a1a; color: #e5e5e5; border-radius: 10px;
+    padding: 20px 24px; font-family: "SF Mono", "Fira Code", monospace; font-size: 12px;
+    line-height: 1.6; width: 100%; max-width: 500px; overflow-x: auto; white-space: pre;
+  }
+  .kw { color: #c792ea; } .str { color: #c3e88d; } .comp { color: #82aaff; } .prop { color: #f78c6c; } .tag { color: #89ddff; }
+
+  /* Inspect */
+  .inspect {
+    margin-top: 24px; width: 100%; max-width: 500px;
+    background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden;
+  }
+  .inspect-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #eee; }
+  .inspect-header h3 { font-size: 13px; color: #999; margin: 0; }
+  .inspect-tabs { display: flex; gap: 2px; }
+  .inspect-tab {
+    padding: 4px 12px; font-size: 11px; border-radius: 6px; cursor: pointer;
+    background: transparent; color: #999; border: none; transition: all 0.15s;
+  }
+  .inspect-tab:hover { background: #f5f5f5; }
+  .inspect-tab.active { background: #1a1a1a; color: #fff; }
+  .inspect-body { padding: 16px 20px; }
+  .inspect-row { display: flex; align-items: baseline; padding: 5px 0; font-size: 12px; border-bottom: 1px solid #f5f5f5; }
+  .inspect-row:last-child { border-bottom: none; }
+  .inspect-prop { width: 140px; color: #999; flex-shrink: 0; font-family: monospace; }
+  .inspect-value { color: #1a1a1a; font-family: monospace; }
+  .inspect-token { margin-left: auto; font-size: 10px; color: #fff; background: #7c3aed; padding: 1px 6px; border-radius: 3px; font-family: monospace; }
+  .inspect-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(0,0,0,0.1); vertical-align: middle; margin-right: 6px; }
+  .inspect-section { font-size: 11px; font-weight: 600; color: #666; padding: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* Menu preview context */
+  .menu-context {
+    background: #fff; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px; width: 240px; margin-top: 24px;
+  }
+  .menu-context-label { font-size: 11px; color: #999; text-align: center; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+</style>
+</head>
+<body>
+
+<svg style="display:none">
+  <symbol id="icon-plus" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></symbol>
+  <symbol id="icon-user" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5.5" r="3"/><path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/></symbol>
+  <symbol id="icon-settings" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"/></symbol>
+  <symbol id="icon-trash" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4.5h10M5.5 4.5V3a1 1 0 011-1h3a1 1 0 011 1v1.5M4.5 4.5v8a1 1 0 001 1h5a1 1 0 001-1v-8"/></symbol>
+  <symbol id="icon-edit" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9.5 3.5l3 3-7.5 7.5H2v-3l7.5-7.5z"/></symbol>
+  <symbol id="icon-star" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l2 4.5 4.5.5-3.5 3 1 4.5L8 12l-4 2 1-4.5L1.5 6.5 6 6z"/></symbol>
+  <symbol id="icon-mail" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="M2 4.5l6 4.5 6-4.5"/></symbol>
+  <symbol id="icon-globe" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M1.5 8h13M8 1.5c-2 2-2 9 0 13M8 1.5c2 2 2 9 0 13"/></symbol>
+  <symbol id="icon-heart" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 13.5S2 9.5 2 6a3 3 0 015.5-1.5L8 5l.5-.5A3 3 0 0114 6c0 3.5-6 7.5-6 7.5z"/></symbol>
+  <symbol id="icon-search" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></symbol>
+  <symbol id="icon-home" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 7.5L8 2.5l5.5 5M4 6.5V13h3v-3h2v3h3V6.5"/></symbol>
+  <symbol id="icon-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3.5 8.5l3 3 6-7"/></symbol>
+  <symbol id="icon-x" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="sidebar">
+    <h1>Menu Item</h1>
+    <p class="subtitle">Generated from Figma via /gitma</p>
+
+    <hr class="divider">
+
+    <div class="control">
+      <label>Label</label>
+      <input type="text" id="ctrl-label" value="Add account">
+    </div>
+
+    <div class="control">
+      <label>Icon Placement</label>
+      <div class="chips" id="ctrl-iconPlacement">
+        <div class="chip active" data-value="left">Left</div>
+        <div class="chip" data-value="right">Right</div>
+      </div>
+    </div>
+
+    <div class="control">
+      <label>Size</label>
+      <div class="chips" id="ctrl-size">
+        <div class="chip active" data-value="sm">sm</div>
+        <div class="chip" data-value="md">md</div>
+      </div>
+    </div>
+
+    <div class="control">
+      <label>State</label>
+      <div class="chips" id="ctrl-state">
+        <div class="chip active" data-value="default">Default</div>
+        <div class="chip" data-value="hover">Hover</div>
+        <div class="chip" data-value="active">Active</div>
+        <div class="chip" data-value="disabled">Disabled</div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="control">
+      <label>Show Icon</label>
+      <div class="toggle-row">
+        <div class="toggle active" id="ctrl-showIcon"></div>
+        <span class="toggle-label">Visible</span>
+      </div>
+    </div>
+
+    <div class="control" id="icon-swap-control">
+      <label>Icon (instance swap)</label>
+      <div class="icon-grid" id="ctrl-icon">
+        <div class="icon-option active" data-value="plus"><svg><use href="#icon-plus"/></svg></div>
+        <div class="icon-option" data-value="user"><svg><use href="#icon-user"/></svg></div>
+        <div class="icon-option" data-value="settings"><svg><use href="#icon-settings"/></svg></div>
+        <div class="icon-option" data-value="trash"><svg><use href="#icon-trash"/></svg></div>
+        <div class="icon-option" data-value="edit"><svg><use href="#icon-edit"/></svg></div>
+        <div class="icon-option" data-value="star"><svg><use href="#icon-star"/></svg></div>
+        <div class="icon-option" data-value="mail"><svg><use href="#icon-mail"/></svg></div>
+        <div class="icon-option" data-value="globe"><svg><use href="#icon-globe"/></svg></div>
+        <div class="icon-option" data-value="heart"><svg><use href="#icon-heart"/></svg></div>
+        <div class="icon-option" data-value="search"><svg><use href="#icon-search"/></svg></div>
+        <div class="icon-option" data-value="home"><svg><use href="#icon-home"/></svg></div>
+        <div class="icon-option" data-value="check"><svg><use href="#icon-check"/></svg></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="preview-card">
+      <div class="preview-label">Preview</div>
+      <div id="preview"></div>
+    </div>
+
+    <div class="menu-context">
+      <div class="menu-context-label" style="padding-top: 8px;">In context</div>
+      <div id="context-menu"></div>
+    </div>
+
+    <div class="code-panel" id="code-output"></div>
+
+    <div class="inspect">
+      <div class="inspect-header">
+        <h3>Inspect</h3>
+        <div class="inspect-tabs">
+          <button class="inspect-tab active" data-tab="design">Design</button>
+          <button class="inspect-tab" data-tab="layout">Layout</button>
+          <button class="inspect-tab" data-tab="typography">Type</button>
+          <button class="inspect-tab" data-tab="css">CSS</button>
+        </div>
+      </div>
+      <div class="inspect-body" id="inspect-body"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const state = {
+  label: "Add account",
+  icon: "plus",
+  iconPlacement: "left",
+  size: "sm",
+  state: "default",
+  showIcon: true,
+};
+
+const iconNames = {
+  plus: "PlusIcon", user: "UserIcon", settings: "SettingsIcon", trash: "TrashIcon",
+  edit: "EditIcon", star: "StarIcon", mail: "MailIcon", globe: "GlobeIcon",
+  heart: "HeartIcon", search: "SearchIcon", home: "HomeIcon", check: "CheckIcon",
+};
+
+const stateColors = {
+  default:  { bg: "#FFFFFF", bgToken: "Background/background0" },
+  hover:    { bg: "#F6F6F6", bgToken: "Background/background50" },
+  active:   { bg: "#F2F1F1", bgToken: "Background/background100" },
+  disabled: { bg: "#FFFFFF", bgToken: "Background/background0" },
+};
+
+function renderMenuItem(opts = {}) {
+  const o = { ...state, ...opts };
+  const isDisabled = o.state === "disabled";
+  const isRight = o.iconPlacement === "right";
+  const forceBg = stateColors[o.state]?.bg || "#fff";
+
+  let classes = `menu-item menu-item--${o.size}`;
+  if (isRight) classes += " menu-item--right";
+  if (isDisabled) classes += " menu-item--disabled";
+
+  const iconHtml = o.showIcon ? `<span class="menu-item__icon"><svg><use href="#icon-${o.icon}"/></svg></span>` : "";
+  // Force background for state preview (since :hover can't be forced)
+  return `<button class="${classes}" style="background:${forceBg}">${iconHtml}<span>${o.label}</span></button>`;
+}
+
+function update() {
+  document.getElementById("preview").innerHTML = renderMenuItem();
+
+  // Context menu with multiple items
+  const items = [
+    { label: "Add account", icon: "plus" },
+    { label: "Edit profile", icon: "edit" },
+    { label: "Settings", icon: "settings" },
+    { label: "Delete", icon: "trash", state: state.state === "disabled" ? "disabled" : "default" },
+  ];
+  document.getElementById("context-menu").innerHTML = items.map((item, i) =>
+    renderMenuItem({ ...state, label: item.label, icon: item.icon, state: i === 0 ? state.state : (item.state || "default") })
+  ).join("");
+
+  // Code
+  const props = [`  <span class="prop">label</span>=<span class="str">"${state.label}"</span>`];
+  if (state.showIcon) props.push(`  <span class="prop">icon</span>={<span class="str">&lt;${iconNames[state.icon]} /&gt;</span>}`);
+  if (!state.showIcon) props.push(`  <span class="prop">showIcon</span>={<span class="str">false</span>}`);
+  if (state.iconPlacement !== "left") props.push(`  <span class="prop">iconPlacement</span>=<span class="str">"${state.iconPlacement}"</span>`);
+  if (state.size !== "sm") props.push(`  <span class="prop">size</span>=<span class="str">"${state.size}"</span>`);
+  if (state.state === "disabled") props.push(`  <span class="prop">disabled</span>`);
+
+  document.getElementById("code-output").innerHTML =
+    `<span class="tag">&lt;</span><span class="comp">MenuItem</span>\n${props.join("\n")}\n<span class="tag">/&gt;</span>`;
+
+  renderInspect();
+}
+
+// Inspect
+let activeTab = "design";
+
+function swatch(color) { return `<span class="inspect-swatch" style="background:${color}"></span>${color}`; }
+function row(prop, value, token) {
+  return `<div class="inspect-row"><span class="inspect-prop">${prop}</span><span class="inspect-value">${value}</span>${token ? `<span class="inspect-token">${token}</span>` : ""}</div>`;
+}
+function section(title) { return `<div class="inspect-section">${title}</div>`; }
+
+function renderInspect() {
+  const sc = stateColors[state.state];
+  const textColor = state.state === "disabled" ? "#A3A3A3" : "#525252";
+  const textToken = state.state === "disabled" ? "Typography/typography400" : "Typography/typography700";
+  const fontSize = state.size === "sm" ? "14px" : "16px";
+  let html = "";
+
+  if (activeTab === "design") {
+    html += section("Fill");
+    html += row("background", swatch(sc.bg), sc.bgToken);
+    html += section("Text");
+    html += row("color", swatch(textColor), textToken);
+    html += section("Corner");
+    html += row("border-radius", "4px", "Border radius/sm");
+    if (state.state === "disabled") {
+      html += section("State");
+      html += row("opacity", "0.7", "");
+      html += row("cursor", "default", "");
+    }
+  }
+
+  if (activeTab === "layout") {
+    html += section("Auto layout");
+    html += row("direction", state.iconPlacement === "right" ? "row-reverse" : "row", "");
+    html += row("gap", "8px", "Spacing/2");
+    html += section("Padding");
+    html += row("padding", "12px", "Spacing/3");
+    html += section("Dimensions");
+    html += row("width", "fill (100%)", "");
+    html += row("height", state.size === "sm" ? "45px" : "48px", "");
+    if (state.showIcon) {
+      html += section("Icon (Instance Swap)");
+      html += row("component", iconNames[state.icon], "");
+      html += row("size", "16 × 16", "");
+      html += row("swappable", "yes — any Icon", "");
+    }
+  }
+
+  if (activeTab === "typography") {
+    html += section("Label");
+    html += row("font-family", "Roboto", "");
+    html += row("font-weight", "400 (Regular)", "");
+    html += row("font-size", fontSize, "");
+    html += row("line-height", "auto", "");
+    html += row("color", swatch(textColor), textToken);
+  }
+
+  if (activeTab === "css") {
+    const lines = [
+      `display: flex;`,
+      `align-items: center;`,
+      state.iconPlacement === "right" ? `flex-direction: row-reverse;` : `flex-direction: row;`,
+      `gap: var(--spacing-2);  /* 8px */`,
+      `padding: var(--spacing-3);  /* 12px */`,
+      `border-radius: var(--radius-sm);  /* 4px */`,
+      `background: var(--color-background-${state.state === "hover" ? "50" : state.state === "active" ? "100" : "0"});`,
+      `color: var(--color-typography-${state.state === "disabled" ? "400" : "700"});`,
+      `font-size: ${fontSize};`,
+      `font-family: Roboto, sans-serif;`,
+      `width: 100%;`,
+      `cursor: ${state.state === "disabled" ? "default" : "pointer"};`,
+    ];
+    if (state.state === "disabled") lines.push(`opacity: 0.7;`);
+    html = `<pre style="font-size:11px;line-height:1.8;margin:0;color:#555;font-family:'SF Mono','Fira Code',monospace;">.menu-item--${state.size}${state.state !== "default" ? ":"+state.state : ""} {\n  ${lines.join("\n  ")}\n}</pre>`;
+  }
+
+  document.getElementById("inspect-body").innerHTML = html;
+}
+
+// Controls
+document.querySelectorAll(".chips").forEach(group => {
+  group.querySelectorAll(".chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      group.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      state[group.id.replace("ctrl-", "")] = chip.dataset.value;
+      update();
+    });
+  });
+});
+
+document.querySelectorAll(".icon-option").forEach(opt => {
+  opt.addEventListener("click", () => {
+    document.querySelectorAll(".icon-option").forEach(o => o.classList.remove("active"));
+    opt.classList.add("active");
+    state.icon = opt.dataset.value;
+    update();
+  });
+});
+
+document.querySelectorAll(".toggle").forEach(toggle => {
+  toggle.addEventListener("click", () => {
+    toggle.classList.toggle("active");
+    state[toggle.id.replace("ctrl-", "")] = toggle.classList.contains("active");
+    // Show/hide icon swap grid based on showIcon toggle
+    document.getElementById("icon-swap-control").style.display = state.showIcon ? "" : "none";
+    update();
+  });
+});
+
+document.getElementById("ctrl-label").addEventListener("input", (e) => {
+  state.label = e.target.value;
+  update();
+});
+
+document.querySelectorAll(".inspect-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".inspect-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    activeTab = tab.dataset.tab;
+    renderInspect();
+  });
+});
+
+update();
+</script>
+</body>
+</html>
