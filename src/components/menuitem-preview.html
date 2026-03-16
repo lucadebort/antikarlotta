@@ -79,8 +79,10 @@
     cursor: pointer; border: none; width: 100%; text-align: left;
     transition: background-color 0.15s;
   }
-  .menu-item:hover { background: var(--color-background-50); }
-  .menu-item:active { background: var(--color-background-100); }
+  .menu-item:hover:not(.menu-item--disabled):not(.menu-item--force) { background: var(--color-background-50); }
+  .menu-item:active:not(.menu-item--disabled):not(.menu-item--force) { background: var(--color-background-100); }
+  .menu-item--force-hover { background: var(--color-background-50) !important; }
+  .menu-item--force-active { background: var(--color-background-100) !important; }
   .menu-item--disabled {
     color: var(--color-typography-400); cursor: default; opacity: 0.7;
   }
@@ -269,15 +271,16 @@ function renderMenuItem(opts = {}) {
   const o = { ...state, ...opts };
   const isDisabled = o.state === "disabled";
   const isRight = o.iconPlacement === "right";
-  const forceBg = stateColors[o.state]?.bg || "#fff";
 
   let classes = `menu-item menu-item--${o.size}`;
   if (isRight) classes += " menu-item--right";
   if (isDisabled) classes += " menu-item--disabled";
+  // Force state via class only when explicitly selected (not "default")
+  if (o.state === "hover") classes += " menu-item--force menu-item--force-hover";
+  if (o.state === "active") classes += " menu-item--force menu-item--force-active";
 
   const iconHtml = o.showIcon ? `<span class="menu-item__icon"><svg><use href="#icon-${o.icon}"/></svg></span>` : "";
-  // Force background for state preview (since :hover can't be forced)
-  return `<button class="${classes}" style="background:${forceBg}">${iconHtml}<span>${o.label}</span></button>`;
+  return `<button class="${classes}">${iconHtml}<span>${o.label}</span></button>`;
 }
 
 function update() {

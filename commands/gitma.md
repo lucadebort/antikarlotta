@@ -328,6 +328,107 @@ Save snapshots in `.gitma/snapshots/` as JSON:
 
 When the user commits a sync, update `committed.json` with the current state.
 
+## Generating interactive preview (`/gitma preview`)
+
+When the user asks for a preview, generate a single self-contained HTML file at `.gitma/preview.html` that shows all components from Figma with interactive controls.
+
+### Step 1: Read all data from Figma
+
+For each component set, read:
+1. **Structure** — properties (VARIANT, BOOLEAN, TEXT, INSTANCE_SWAP) via the component structure code above
+2. **Visual properties** — for multiple variant children (to understand how styles change per variant). For each variant axis value, read one child using the visual properties code above
+3. **Design tokens** — all variables from the file using the design tokens code above
+
+### Step 2: Generate the preview HTML
+
+The preview is a **3-column layout**:
+
+```
+┌──────────────┬─────────────────────┬──────────────────┐
+│  Left        │  Center             │  Right           │
+│  sidebar     │  preview area       │  inspect panel   │
+│              │                     │                  │
+│  ← Back      │                     │  DESIGN          │
+│  Component   │    [component]      │  background ...  │
+│  name (F)    │                     │  color ...       │
+│              │                     │                  │
+│  Controls:   │                     │  LAYOUT          │
+│  - chips     │                     │  direction ...   │
+│  - toggles   │                     │  gap ...         │
+│  - text      │                     │  padding ...     │
+│  - icon grid │                     │                  │
+│              │                     │  CSS             │
+│              │                     │  .component {    │
+│  POWERED BY  │                     │    ...           │
+│  GITMA       │                     │  }               │
+├──────────────┴─────────────────────┴──────────────────┤
+│  Code                                        [Copy]   │
+│  <Component prop="value" />                           │
+└───────────────────────────────────────────────────────┘
+```
+
+**Key rules:**
+
+**Component list page:**
+- Sidebar with all components as clickable items (name + meta like "3 variants, 4 props")
+- Click → navigate to component page
+- "POWERED BY GITMA" at the bottom of sidebar with link to https://github.com/lucadebort/gitma
+
+**Component page — Left sidebar:**
+- "← All components" back button at top
+- Component name with Figma icon linking to `https://www.figma.com/design/<fileKey>?node-id=<nodeId>` (tooltip: "View in Figma")
+- For each VARIANT property → chip selector with all values
+- For each BOOLEAN property → toggle switch. If it controls visibility of an INSTANCE_SWAP (e.g., "Show Icon" controls "Icon" slot), show the icon grid below the toggle — hide the grid when toggle is off
+- For each TEXT property → text input
+- For each INSTANCE_SWAP property → icon grid (only shown when the associated boolean is on)
+- "POWERED BY GITMA" at bottom
+
+**Component page — Center (preview area):**
+- Full width, white background, component centered
+- "PREVIEW" label top-left, subtle
+- 1rem padding all sides
+- The component renders with actual CSS using the Figma tokens as CSS variables
+- Interactive states (:hover, :active) work natively when state selector is on "Default"
+- When a specific state is force-selected from the panel (e.g., "Hover"), add a CSS class to freeze that state
+
+**Component page — Right (inspect panel):**
+- 320px wide, divided into 3 always-visible sections: **Design**, **Layout**, **CSS**
+- Each section has a header bar and body
+- Values that reference a token: show a purple badge (`background: #f3ecff; color: #6d28d9`) with the token name, and the raw value in small gray text next to it (inline, same row)
+- Multiple tokens on same property (e.g., padding): show as separate badges inline
+- Color values: show a 10x10 swatch inside the badge
+- Values WITHOUT a token: show as plain monospace text, no badge
+- This distinction must be immediately clear: purple = token, no purple = hardcoded
+
+**Code dock (fixed bottom):**
+- Fixed to bottom of viewport, spans from left sidebar to right panel
+- Dark background (#1a1a1a), "Code" label on left, "Copy" button on right
+- Shows the React JSX for the current configuration
+- Collapsible (click header to toggle)
+- Copy button copies plain text JSX to clipboard, shows "Copied!" for 1.5s
+- Max height 280px, scrollable
+
+### Step 3: CSS for the component
+
+For each component, generate CSS classes based on what you read from Figma:
+- Base class with shared styles (layout, padding, border-radius, font)
+- Modifier classes for each variant axis value (e.g., `.badge--error`, `.badge--sm`)
+- All colors/spacing/radii reference CSS custom properties (design tokens)
+- Interactive states: `:hover` and `:active` pseudo-classes where applicable
+
+**Token → CSS variable naming:**
+- `Error/error background` → `--color-error-background`
+- `Spacing/2` → `--spacing-2`
+- `Border radius/xs` → `--radius-xs`
+- `Primary/primary500` → `--color-primary-500`
+
+### Important preview rules
+
+1. **Only show data from Figma.** Never invent labels, icons, or context examples.
+2. **Every icon in the grid must correspond to a real component** from the preferred values of the INSTANCE_SWAP property. Use simplified SVG representations.
+3. **Every color/spacing/radius value must trace back to a Figma variable.** Show the token name in the inspect panel.
+4. **Read multiple variant children** to understand how styles differ per variant value (e.g., read Error AND Success to see different fill colors).
+
 ## Behavior rules
 
 1. **`/gitma`** with no args → read both sides, show status, suggest actions
@@ -336,6 +437,7 @@ When the user commits a sync, update `committed.json` with the current state.
 4. **`/gitma push code`** → show code changes, ask to apply to Figma
 5. **`/gitma diff`** → show detailed diff both directions
 6. **`/gitma generate <ComponentName>`** → read Figma component with visual props + tokens, generate complete React component from scratch
+7. **`/gitma preview`** → read all components from Figma, generate interactive preview HTML at `.gitma/preview.html` and open it
 7. **Never apply without confirmation.** Show what will change, ask "apply?"
 8. **Highlight breaking changes** clearly and explain impact
 9. **After applying to Figma**, re-read the component to verify it worked
