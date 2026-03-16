@@ -108,7 +108,12 @@ Save what you detected in `.gitma/config.json` so you don't re-detect every time
 }
 ```
 
-If unsure about any convention, ask the user rather than guessing.
+**If you can't determine the conventions:**
+- No existing components? Ask the user what stack and styling they want.
+- Mixed conventions (different components use different patterns)? Tell the user what you found and ask which convention to follow for new code.
+- Ambiguous patterns? Show what you found and ask for clarification.
+
+Never guess. Never default to React or Tailwind just because they're popular.
 
 ## Reading Figma — Component structure
 
