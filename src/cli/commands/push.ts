@@ -172,8 +172,8 @@ async function pushCodeToFigma(
       }
     }
 
-    const automated = ops.filter((o) => o.operation.type !== "manual").length;
-    const manual = ops.filter((o) => o.operation.type === "manual").length;
+    const manual = ops.filter((o) => o.code.includes("manual: true")).length;
+    const automated = ops.length - manual;
 
     if (automated > 0) {
       console.log(chalk.green(`\n  ${automated} change(s) saved to .gitma/figma-write-ops.json`));
