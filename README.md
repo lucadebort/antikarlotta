@@ -20,7 +20,13 @@ claude mcp add figma-console -- npx -y figma-console-mcp@latest
 npx figma-console-mcp@latest --print-path
 # → Import the manifest in Figma: Plugins → Development → Import plugin from manifest
 
-# 3. Install the /gitma command
+# 3. Install the /gitma command (pick one)
+
+# Per project (committed to git, shared with team):
+mkdir -p .claude/commands
+curl -o .claude/commands/gitma.md https://raw.githubusercontent.com/lucadebort/gitma/main/commands/gitma.md
+
+# Or global (available in all projects):
 curl -o ~/.claude/commands/gitma.md https://raw.githubusercontent.com/lucadebort/gitma/main/commands/gitma.md
 ```
 
