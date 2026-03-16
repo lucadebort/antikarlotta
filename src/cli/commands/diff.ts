@@ -10,6 +10,7 @@ import { diffSchemas } from "../../diff-engine/differ.js";
 import { readCodeComponents } from "../../code-adapter/reader.js";
 import { readFigmaSchemas } from "../../figma-adapter/read-and-resolve.js";
 import { formatDiff } from "../formatters/diff-printer.js";
+import { connectFigma, disconnect } from "../figma-connect.js";
 
 export const diffCommand = new Command("diff")
   .description("Show detailed component diff")
@@ -37,26 +38,25 @@ export const diffCommand = new Command("diff")
     }
 
     if (opts.figma) {
-      if (!config.figmaFileKey) {
-        console.log(chalk.red("\n  No Figma file key configured."));
-      } else {
-        try {
-          console.log(chalk.dim("  Reading Figma..."));
-          const figmaSchemas = await readFigmaSchemas(
-            { fileKey: config.figmaFileKey },
-            { nameConfig: { nameMap: config.componentNameMap }, propertyMap: config.propertyMap },
-          );
-          let changes = diffSchemas(committed, figmaSchemas);
+      try {
+        console.log(chalk.dim("  Reading Figma..."));
+        const conn = await connectFigma(config.figmaFileKey);
+        const figmaSchemas = await readFigmaSchemas(
+          conn,
+          { nameConfig: { nameMap: config.componentNameMap }, propertyMap: config.propertyMap },
+        );
+        await disconnect(conn);
 
-          if (opts.component) {
-            changes = changes.filter((c) => c.componentName === opts.component);
-          }
+        let changes = diffSchemas(committed, figmaSchemas);
 
-          console.log(chalk.bold("\n  Figma → Schema diff:"));
-          console.log(formatDiff(changes));
-        } catch (err) {
-          console.log(chalk.red(`\n  Could not read Figma: ${err instanceof Error ? err.message : String(err)}`));
+        if (opts.component) {
+          changes = changes.filter((c) => c.componentName === opts.component);
         }
+
+        console.log(chalk.bold("\n  Figma → Schema diff:"));
+        console.log(formatDiff(changes));
+      } catch (err) {
+        console.log(chalk.red(`\n  Could not read Figma: ${err instanceof Error ? err.message : String(err)}`));
       }
     }
 

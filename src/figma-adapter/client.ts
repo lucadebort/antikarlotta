@@ -1,9 +1,8 @@
 /**
- * Figma client — wraps the Figma REST API for component and variable reads.
+ * Figma client — reads components and variables via the bridge plugin.
  *
- * Uses GET /files/:key/components for published library components,
- * then groups them by containingComponentSet and fetches property
- * definitions from the node tree.
+ * Uses the WebSocketConnector to execute plugin code directly in
+ * Figma Desktop. No auth token needed.
  */
 
 import type {
@@ -11,197 +10,119 @@ import type {
   FigmaComponentSet,
   FigmaVariable,
   FigmaVariableCollection,
-  FigmaAdapterConfig,
   FigmaComponentProperty,
 } from "./types.js";
-
-const FIGMA_API_BASE = "https://api.figma.com/v1";
-
-// ---------------------------------------------------------------------------
-// API helpers
-// ---------------------------------------------------------------------------
-
-function getToken(config: FigmaAdapterConfig): string {
-  const token = config.accessToken ?? process.env.FIGMA_ACCESS_TOKEN;
-  if (!token) {
-    throw new Error(
-      "Figma access token not found. Set FIGMA_ACCESS_TOKEN env var or pass accessToken in config.",
-    );
-  }
-  return token;
-}
-
-async function figmaFetch<T>(
-  path: string,
-  token: string,
-): Promise<T> {
-  const url = `${FIGMA_API_BASE}${path}`;
-  const response = await fetch(url, {
-    headers: { "X-FIGMA-TOKEN": token },
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Figma API error ${response.status}: ${body}`);
-  }
-
-  return response.json() as Promise<T>;
-}
-
-// ---------------------------------------------------------------------------
-// API response types
-// ---------------------------------------------------------------------------
-
-interface FigmaPublishedComponent {
-  key: string;
-  file_key: string;
-  node_id: string;
-  name: string;
-  description: string;
-  containing_frame: {
-    name: string;
-    nodeId: string;
-    pageId: string;
-    pageName: string;
-    containingComponentSet?: {
-      name: string;
-      nodeId: string;
-    };
-  };
-}
-
-interface FigmaFileComponentsResponse {
-  meta: {
-    components: FigmaPublishedComponent[];
-  };
-}
-
-interface FigmaFileNodesResponse {
-  nodes: Record<
-    string,
-    {
-      document: {
-        id: string;
-        name: string;
-        type: string;
-        componentPropertyDefinitions?: Record<string, FigmaComponentProperty>;
-        children?: Array<{
-          id: string;
-          name: string;
-          type: string;
-        }>;
-      };
-    }
-  >;
-}
-
-interface FigmaVariablesResponse {
-  meta: {
-    variables: Record<string, {
-      id: string;
-      name: string;
-      key: string;
-      resolvedType: "BOOLEAN" | "FLOAT" | "STRING" | "COLOR";
-      description: string;
-      valuesByMode: Record<string, unknown>;
-      variableCollectionId: string;
-    }>;
-    variableCollections: Record<string, {
-      id: string;
-      name: string;
-      key: string;
-      modes: Array<{ modeId: string; name: string }>;
-      variableIds: string[];
-    }>;
-  };
-}
+import type { FigmaConnection } from "./mcp-connection.js";
+import { executeInFigma } from "./mcp-connection.js";
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch all published components from a Figma file, grouped into component sets.
+ * Fetch all components from the open Figma file.
  *
- * Groups components by their containingComponentSet, then fetches property
- * definitions from the component set nodes.
+ * Scans all pages for component sets and standalone components,
+ * then reads their componentPropertyDefinitions.
  */
 export async function fetchComponents(
-  config: FigmaAdapterConfig,
+  conn: FigmaConnection,
 ): Promise<{ componentSets: FigmaComponentSet[]; components: FigmaComponent[] }> {
-  const token = getToken(config);
-  const { fileKey } = config;
-
-  // Step 1: Get all published components
-  const meta = await figmaFetch<FigmaFileComponentsResponse>(
-    `/files/${fileKey}/components`,
-    token,
+  // Step 1: Find all component sets and standalone components across all pages
+  const allItems = await executeInFigma<Array<{
+    name: string;
+    key: string;
+    nodeId: string;
+    type: "COMPONENT_SET" | "COMPONENT";
+  }>>(
+    conn,
+    `
+    await figma.loadAllPagesAsync();
+    const items = [];
+    for (const page of figma.root.children) {
+      const sets = page.findAllWithCriteria({ types: ["COMPONENT_SET"] });
+      for (const s of sets) {
+        items.push({ name: s.name, key: s.key, nodeId: s.id, type: "COMPONENT_SET" });
+      }
+      const comps = page.findAllWithCriteria({ types: ["COMPONENT"] });
+      for (const c of comps) {
+        if (c.parent?.type !== "COMPONENT_SET") {
+          items.push({ name: c.name, key: c.key, nodeId: c.id, type: "COMPONENT" });
+        }
+      }
+    }
+    return items;
+    `,
+    30_000,
   );
 
-  const allComponents: FigmaComponent[] = meta.meta.components.map((c) => ({
-    key: c.key,
-    name: c.name,
-    description: c.description,
-    nodeId: c.node_id,
-    componentSetId: c.containing_frame?.containingComponentSet?.nodeId,
-  }));
-
-  // Step 2: Group components by containingComponentSet
-  const setMap = new Map<string, {
-    name: string;
-    nodeId: string;
-    components: FigmaComponent[];
-  }>();
-
+  // Step 2: For each component set, fetch property definitions
+  const componentSets: FigmaComponentSet[] = [];
   const standaloneComponents: FigmaComponent[] = [];
 
-  for (const comp of allComponents) {
-    const setInfo = meta.meta.components.find((c) => c.node_id === comp.nodeId)
-      ?.containing_frame?.containingComponentSet;
-
-    if (setInfo) {
-      const existing = setMap.get(setInfo.nodeId);
-      if (existing) {
-        existing.components.push(comp);
-      } else {
-        setMap.set(setInfo.nodeId, {
-          name: setInfo.name,
-          nodeId: setInfo.nodeId,
-          components: [comp],
-        });
-      }
-    } else {
-      standaloneComponents.push(comp);
-    }
-  }
-
-  // Step 3: Fetch component set nodes to get property definitions
-  const setNodeIds = [...setMap.keys()];
-  const componentSets: FigmaComponentSet[] = [];
-
-  for (let i = 0; i < setNodeIds.length; i += 50) {
-    const batch = setNodeIds.slice(i, i + 50);
-    const ids = batch.join(",");
-
-    const nodesResponse = await figmaFetch<FigmaFileNodesResponse>(
-      `/files/${fileKey}/nodes?ids=${ids}`,
-      token,
-    );
-
-    for (const nodeId of batch) {
-      const setInfo = setMap.get(nodeId);
-      if (!setInfo) continue;
-
-      const nodeData = nodesResponse.nodes[nodeId];
-      const propDefs = nodeData?.document?.componentPropertyDefinitions ?? {};
+  for (const item of allItems) {
+    if (item.type === "COMPONENT_SET") {
+      const data = await executeInFigma<{
+        propDefs: Record<string, FigmaComponentProperty>;
+        variants: FigmaComponent[];
+      }>(
+        conn,
+        `
+        const node = await figma.getNodeByIdAsync(${JSON.stringify(item.nodeId)});
+        if (!node || node.type !== "COMPONENT_SET") return { propDefs: {}, variants: [] };
+        const propDefs = {};
+        for (const [key, def] of Object.entries(node.componentPropertyDefinitions)) {
+          propDefs[key] = {
+            type: def.type,
+            defaultValue: def.defaultValue,
+            variantOptions: def.variantOptions || undefined,
+            preferredValues: def.preferredValues?.map(v => ({ type: v.type, key: v.key })) || undefined,
+          };
+        }
+        const variants = node.children.map(c => ({
+          key: c.key,
+          name: c.name,
+          description: c.description || "",
+          nodeId: c.id,
+          componentSetId: ${JSON.stringify(item.nodeId)},
+        }));
+        return { propDefs, variants };
+        `,
+      );
 
       componentSets.push({
-        key: nodeId,
-        name: setInfo.name,
+        key: item.key,
+        name: item.name,
         description: "",
-        nodeId: setInfo.nodeId,
+        nodeId: item.nodeId,
+        componentPropertyDefinitions: data.propDefs,
+        variantComponents: data.variants,
+      });
+    } else {
+      const propDefs = await executeInFigma<Record<string, FigmaComponentProperty>>(
+        conn,
+        `
+        const node = await figma.getNodeByIdAsync(${JSON.stringify(item.nodeId)});
+        if (!node || node.type !== "COMPONENT") return {};
+        const result = {};
+        for (const [key, def] of Object.entries(node.componentPropertyDefinitions || {})) {
+          result[key] = {
+            type: def.type,
+            defaultValue: def.defaultValue,
+            variantOptions: def.variantOptions || undefined,
+            preferredValues: def.preferredValues?.map(v => ({ type: v.type, key: v.key })) || undefined,
+          };
+        }
+        return result;
+        `,
+      );
+
+      standaloneComponents.push({
+        key: item.key,
+        name: item.name,
+        description: "",
+        nodeId: item.nodeId,
         componentPropertyDefinitions: propDefs,
-        variantComponents: setInfo.components,
       });
     }
   }
@@ -210,38 +131,40 @@ export async function fetchComponents(
 }
 
 /**
- * Fetch all variables and variable collections from a Figma file.
+ * Fetch all variables and collections from the open Figma file.
  */
 export async function fetchVariables(
-  config: FigmaAdapterConfig,
+  conn: FigmaConnection,
 ): Promise<{ variables: FigmaVariable[]; collections: FigmaVariableCollection[] }> {
-  const token = getToken(config);
-  const { fileKey } = config;
-
-  const response = await figmaFetch<FigmaVariablesResponse>(
-    `/files/${fileKey}/variables/local`,
-    token,
+  const data = await executeInFigma<{
+    variables: FigmaVariable[];
+    collections: FigmaVariableCollection[];
+  }>(
+    conn,
+    `
+    const variables = await figma.variables.getLocalVariablesAsync();
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    return {
+      variables: variables.map(v => ({
+        id: v.id,
+        name: v.name,
+        key: v.key,
+        resolvedType: v.resolvedType,
+        description: v.description || "",
+        valuesByMode: v.valuesByMode,
+        variableCollectionId: v.variableCollectionId,
+      })),
+      collections: collections.map(c => ({
+        id: c.id,
+        name: c.name,
+        key: c.key,
+        modes: c.modes,
+        variableIds: c.variableIds,
+      })),
+    };
+    `,
+    15_000,
   );
 
-  const variables: FigmaVariable[] = Object.values(response.meta.variables).map((v) => ({
-    id: v.id,
-    name: v.name,
-    key: v.key,
-    resolvedType: v.resolvedType,
-    description: v.description,
-    valuesByMode: v.valuesByMode as Record<string, any>,
-    variableCollectionId: v.variableCollectionId,
-  }));
-
-  const collections: FigmaVariableCollection[] = Object.values(
-    response.meta.variableCollections,
-  ).map((c) => ({
-    id: c.id,
-    name: c.name,
-    key: c.key,
-    modes: c.modes,
-    variableIds: c.variableIds,
-  }));
-
-  return { variables, collections };
+  return data;
 }

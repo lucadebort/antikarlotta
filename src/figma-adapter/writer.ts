@@ -1,71 +1,18 @@
 /**
- * Figma writer — push schema changes back to Figma.
+ * Figma writer — push schema changes back to Figma via MCP.
  *
  * Capabilities:
- * - Variables (tokens): full CRUD via Figma REST API /v1/files/:key/variables
- * - Component properties: NOT supported via REST API — requires Figma Plugin API
- *   or MCP write-back. Component property changes are returned as instructions
- *   for the designer to apply manually or via MCP.
+ * - Component properties: add/delete via Plugin API (figma_execute)
+ * - Variables (tokens): full CRUD via Plugin API
  */
 
-import type { FigmaAdapterConfig } from "./types.js";
 import type { FigmaVariableInput } from "./token-bridge.js";
-
-const FIGMA_API_BASE = "https://api.figma.com/v1";
-
-// ---------------------------------------------------------------------------
-// Auth
-// ---------------------------------------------------------------------------
-
-function getToken(config: FigmaAdapterConfig): string {
-  const token = config.accessToken ?? process.env.FIGMA_ACCESS_TOKEN;
-  if (!token) {
-    throw new Error(
-      "Figma access token not found. Set FIGMA_ACCESS_TOKEN env var or pass accessToken in config.",
-    );
-  }
-  return token;
-}
+import type { SchemaChange } from "../diff-engine/types.js";
+import { executeInFigma, type FigmaConnection } from "./mcp-connection.js";
 
 // ---------------------------------------------------------------------------
-// Variable write-back
+// Variable write-back via MCP
 // ---------------------------------------------------------------------------
-
-/**
- * Figma Variables API payload shape.
- * @see https://www.figma.com/developers/api#variables
- */
-interface VariableChange {
-  action: "CREATE" | "UPDATE" | "DELETE";
-  id?: string;
-  name?: string;
-  variableCollectionId?: string;
-  resolvedType?: "BOOLEAN" | "FLOAT" | "STRING" | "COLOR";
-  description?: string;
-  /** Values per mode ID */
-  valueModeValues?: Array<{
-    variableId?: string;
-    modeId: string;
-    value: unknown;
-  }>;
-}
-
-interface VariableCollectionChange {
-  action: "CREATE" | "UPDATE" | "DELETE";
-  id?: string;
-  name?: string;
-  initialModeId?: string;
-}
-
-interface VariablesPayload {
-  variableCollections?: VariableCollectionChange[];
-  variables?: VariableChange[];
-  variableModeValues?: Array<{
-    variableId: string;
-    modeId: string;
-    value: unknown;
-  }>;
-}
 
 export interface WriteVariablesResult {
   created: number;
@@ -74,18 +21,16 @@ export interface WriteVariablesResult {
 }
 
 /**
- * Push token variables to Figma.
+ * Push token variables to Figma via the Plugin API.
  *
- * Creates or updates variables in the Figma file. Groups variables
- * into collections based on the first path segment.
+ * Creates or updates variables in the open Figma file.
  */
 export async function writeVariablesToFigma(
-  config: FigmaAdapterConfig,
+  conn: FigmaConnection,
   variables: FigmaVariableInput[],
   existingCollections?: Map<string, string>, // name → id
   existingVariables?: Map<string, string>,   // name → id
 ): Promise<WriteVariablesResult> {
-  const token = getToken(config);
   const result: WriteVariablesResult = { created: 0, updated: 0, errors: [] };
 
   // Group variables by collection
@@ -96,103 +41,252 @@ export async function writeVariablesToFigma(
     byCollection.set(v.collectionName, group);
   }
 
-  // Build the payload
-  const payload: VariablesPayload = {
-    variableCollections: [],
-    variables: [],
-    variableModeValues: [],
-  };
-
-  // Create collections that don't exist
-  const tempCollectionIds = new Map<string, string>();
-  let tempIdCounter = 0;
-
-  for (const collectionName of byCollection.keys()) {
-    const existingId = existingCollections?.get(collectionName);
-    if (!existingId) {
-      const tempId = `temp_collection_${tempIdCounter++}`;
-      tempCollectionIds.set(collectionName, tempId);
-      payload.variableCollections!.push({
-        action: "CREATE",
-        id: tempId,
-        name: collectionName,
-      });
-    }
-  }
-
-  // Create or update variables
-  let tempVarIdCounter = 0;
-
   for (const [collectionName, vars] of byCollection) {
-    const collectionId = existingCollections?.get(collectionName)
-      ?? tempCollectionIds.get(collectionName);
+    try {
+      const batchResult = await executeInFigma<{
+        created: number;
+        updated: number;
+        errors: string[];
+      }>(
+        conn,
+        `
+        const collectionName = ${JSON.stringify(collectionName)};
+        const existingCollectionId = ${JSON.stringify(existingCollections?.get(collectionName) ?? null)};
+        const vars = ${JSON.stringify(vars)};
+        const existingVarMap = ${JSON.stringify(Object.fromEntries(existingVariables ?? new Map()))};
 
-    if (!collectionId) continue;
+        const result = { created: 0, updated: 0, errors: [] };
 
-    for (const v of vars) {
-      const existingId = existingVariables?.get(v.name);
+        // Find or create collection
+        let collection;
+        if (existingCollectionId) {
+          collection = await figma.variables.getVariableCollectionByIdAsync(existingCollectionId);
+        }
+        if (!collection) {
+          const collections = await figma.variables.getLocalVariableCollectionsAsync();
+          collection = collections.find(c => c.name === collectionName);
+        }
+        if (!collection) {
+          collection = figma.variables.createVariableCollection(collectionName);
+        }
 
-      if (existingId) {
-        // Update existing variable
-        payload.variables!.push({
-          action: "UPDATE",
-          id: existingId,
-          name: v.name,
-          description: v.description,
-        });
-        result.updated++;
-      } else {
-        // Create new variable
-        const tempId = `temp_var_${tempVarIdCounter++}`;
-        payload.variables!.push({
-          action: "CREATE",
-          id: tempId,
-          name: v.name,
-          variableCollectionId: collectionId,
-          resolvedType: v.resolvedType,
-          description: v.description,
-        });
-        result.created++;
-      }
+        const defaultModeId = collection.modes[0].modeId;
+
+        for (const v of vars) {
+          try {
+            const existingId = existingVarMap[v.name];
+            if (existingId) {
+              const existing = await figma.variables.getVariableByIdAsync(existingId);
+              if (existing && v.value !== undefined) {
+                existing.setValueForMode(defaultModeId, v.value);
+                result.updated++;
+              }
+            } else {
+              const newVar = figma.variables.createVariable(v.name, collection, v.resolvedType);
+              if (v.description) newVar.description = v.description;
+              if (v.value !== undefined) newVar.setValueForMode(defaultModeId, v.value);
+              result.created++;
+            }
+          } catch (e) {
+            result.errors.push(v.name + ": " + e.message);
+          }
+        }
+
+        return result;
+        `,
+        15_000,
+      );
+
+      result.created += batchResult.created;
+      result.updated += batchResult.updated;
+      result.errors.push(...batchResult.errors);
+    } catch (err) {
+      result.errors.push(
+        `Collection "${collectionName}": ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
-  }
-
-  // POST to Figma
-  try {
-    const response = await fetch(
-      `${FIGMA_API_BASE}/files/${config.fileKey}/variables`,
-      {
-        method: "POST",
-        headers: {
-          "X-FIGMA-TOKEN": token,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      },
-    );
-
-    if (!response.ok) {
-      const body = await response.text();
-      result.errors.push(`Figma API error ${response.status}: ${body}`);
-    }
-  } catch (err) {
-    result.errors.push(
-      `Network error: ${err instanceof Error ? err.message : String(err)}`,
-    );
   }
 
   return result;
 }
 
 // ---------------------------------------------------------------------------
-// Component property change instructions
+// Component property write-back via MCP
 // ---------------------------------------------------------------------------
 
+export interface WriteComponentResult {
+  applied: number;
+  errors: string[];
+}
+
 /**
- * Component property changes can't be done via REST API.
- * Instead, generate human-readable instructions for the designer
- * or structured data for MCP write-back.
+ * Apply schema changes to Figma component properties.
+ *
+ * Handles adding/removing boolean, text, and instance swap properties.
+ * Variant changes are more complex (require creating child components)
+ * and are reported as instructions.
  */
+export async function applySchemaChangesToFigma(
+  conn: FigmaConnection,
+  changes: SchemaChange[],
+): Promise<WriteComponentResult> {
+  const result: WriteComponentResult = { applied: 0, errors: [] };
+
+  for (const change of changes) {
+    // Need a figmaNodeId to target the component
+    const nodeId = (change as any).figmaNodeId;
+    if (!nodeId) {
+      result.errors.push(`${change.componentName}: no figmaNodeId — cannot write`);
+      continue;
+    }
+
+    try {
+      switch (change.target) {
+        case "prop": {
+          if (change.changeType === "added") {
+            const prop = change.after as { type: string; defaultValue?: unknown };
+            const figmaType = mapPropTypeToFigma(prop.type);
+            if (!figmaType) {
+              result.errors.push(`${change.componentName}.${change.fieldPath}: unsupported type "${prop.type}"`);
+              continue;
+            }
+            await executeInFigma(
+              conn,
+              `
+              const node = await figma.getNodeByIdAsync(${JSON.stringify(nodeId)});
+              if (!node || (node.type !== "COMPONENT_SET" && node.type !== "COMPONENT")) {
+                throw new Error("Node not found or wrong type");
+              }
+              node.addComponentProperty(
+                ${JSON.stringify(change.fieldPath.split(".")[1])},
+                ${JSON.stringify(figmaType)},
+                ${JSON.stringify(prop.defaultValue ?? getDefaultForType(figmaType))},
+              );
+              return true;
+              `,
+            );
+            result.applied++;
+          } else if (change.changeType === "removed") {
+            const propName = change.fieldPath.split(".")[1];
+            await executeInFigma(
+              conn,
+              `
+              const node = await figma.getNodeByIdAsync(${JSON.stringify(nodeId)});
+              if (!node || (node.type !== "COMPONENT_SET" && node.type !== "COMPONENT")) {
+                throw new Error("Node not found or wrong type");
+              }
+              const key = Object.keys(node.componentPropertyDefinitions)
+                .find(k => k.startsWith(${JSON.stringify(propName)}));
+              if (!key) throw new Error("Property not found: " + ${JSON.stringify(propName)});
+              node.deleteComponentProperty(key);
+              return true;
+              `,
+            );
+            result.applied++;
+          }
+          break;
+        }
+
+        case "slot": {
+          if (change.changeType === "added") {
+            await executeInFigma(
+              conn,
+              `
+              const node = await figma.getNodeByIdAsync(${JSON.stringify(nodeId)});
+              if (!node || (node.type !== "COMPONENT_SET" && node.type !== "COMPONENT")) {
+                throw new Error("Node not found or wrong type");
+              }
+              node.addComponentProperty(
+                ${JSON.stringify(change.fieldPath.split(".")[1])},
+                "INSTANCE_SWAP",
+                node.children?.[0]?.id ?? "",
+              );
+              return true;
+              `,
+            );
+            result.applied++;
+          } else if (change.changeType === "removed") {
+            const slotName = change.fieldPath.split(".")[1];
+            await executeInFigma(
+              conn,
+              `
+              const node = await figma.getNodeByIdAsync(${JSON.stringify(nodeId)});
+              if (!node || (node.type !== "COMPONENT_SET" && node.type !== "COMPONENT")) {
+                throw new Error("Node not found or wrong type");
+              }
+              const key = Object.keys(node.componentPropertyDefinitions)
+                .find(k => k.startsWith(${JSON.stringify(slotName)}));
+              if (!key) throw new Error("Property not found: " + ${JSON.stringify(slotName)});
+              node.deleteComponentProperty(key);
+              return true;
+              `,
+            );
+            result.applied++;
+          }
+          break;
+        }
+
+        case "state": {
+          if (change.changeType === "added") {
+            await executeInFigma(
+              conn,
+              `
+              const node = await figma.getNodeByIdAsync(${JSON.stringify(nodeId)});
+              if (!node || (node.type !== "COMPONENT_SET" && node.type !== "COMPONENT")) {
+                throw new Error("Node not found or wrong type");
+              }
+              node.addComponentProperty(
+                ${JSON.stringify(change.fieldPath.split(".")[1])},
+                "BOOLEAN",
+                false,
+              );
+              return true;
+              `,
+            );
+            result.applied++;
+          } else if (change.changeType === "removed") {
+            const stateName = change.fieldPath.split(".")[1];
+            await executeInFigma(
+              conn,
+              `
+              const node = await figma.getNodeByIdAsync(${JSON.stringify(nodeId)});
+              if (!node || (node.type !== "COMPONENT_SET" && node.type !== "COMPONENT")) {
+                throw new Error("Node not found or wrong type");
+              }
+              const key = Object.keys(node.componentPropertyDefinitions)
+                .find(k => k.startsWith(${JSON.stringify(stateName)}));
+              if (!key) throw new Error("Property not found: " + ${JSON.stringify(stateName)});
+              node.deleteComponentProperty(key);
+              return true;
+              `,
+            );
+            result.applied++;
+          }
+          break;
+        }
+
+        case "variant": {
+          // Variant changes require creating/removing child components —
+          // too complex for automated write-back. Report as instruction.
+          result.errors.push(
+            `${change.componentName}: variant "${change.fieldPath}" change requires manual update in Figma`,
+          );
+          break;
+        }
+      }
+    } catch (err) {
+      result.errors.push(
+        `${change.componentName}.${change.fieldPath}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Designer instructions (fallback when MCP is unavailable)
+// ---------------------------------------------------------------------------
 
 export interface ComponentChangeInstruction {
   componentName: string;
@@ -200,10 +294,9 @@ export interface ComponentChangeInstruction {
   instructions: string[];
 }
 
-import type { SchemaChange } from "../diff-engine/types.js";
-
 /**
  * Convert schema changes into designer-readable instructions.
+ * Used as fallback when Figma Desktop is not available.
  */
 export function generateDesignerInstructions(
   changes: SchemaChange[],
@@ -277,4 +370,25 @@ export function generateDesignerInstructions(
   }
 
   return instructions;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function mapPropTypeToFigma(schemaType: string): string | null {
+  switch (schemaType) {
+    case "boolean": return "BOOLEAN";
+    case "string": return "TEXT";
+    case "node": return "INSTANCE_SWAP";
+    default: return null;
+  }
+}
+
+function getDefaultForType(figmaType: string): unknown {
+  switch (figmaType) {
+    case "BOOLEAN": return false;
+    case "TEXT": return "";
+    default: return "";
+  }
 }

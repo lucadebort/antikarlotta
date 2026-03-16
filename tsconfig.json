@@ -17,5 +17,5 @@
     "baseUrl": "."
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist", "src/__test-design-system__"]
+  "exclude": ["node_modules", "dist", "src/__test-design-system__", "src/**/*.test.ts"]
 }

@@ -10,6 +10,7 @@ import { diffSchemas } from "../../diff-engine/differ.js";
 import { readCodeComponents } from "../../code-adapter/reader.js";
 import { readFigmaSchemas } from "../../figma-adapter/read-and-resolve.js";
 import { formatStatus } from "../formatters/status-printer.js";
+import { connectFigma, disconnect } from "../figma-connect.js";
 import type { SchemaChange } from "../../diff-engine/types.js";
 
 export const statusCommand = new Command("status")
@@ -33,18 +34,20 @@ export const statusCommand = new Command("status")
 
     // Read Figma state if configured
     let figmaChanges: SchemaChange[] = [];
-    if (config.figmaFileKey && opts.figma !== false) {
+    if (opts.figma !== false) {
       try {
         console.log(chalk.dim("  Reading Figma..."));
+        const conn = await connectFigma(config.figmaFileKey);
         const figmaSchemas = await readFigmaSchemas(
-          { fileKey: config.figmaFileKey },
+          conn,
           { nameConfig: { nameMap: config.componentNameMap }, propertyMap: config.propertyMap },
         );
         figmaChanges = diffSchemas(committed, figmaSchemas);
+        await disconnect(conn);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.log(chalk.yellow(`  Could not read Figma: ${msg}`));
-        console.log(chalk.dim("  Use --no-figma to skip, or set FIGMA_ACCESS_TOKEN.\n"));
+        console.log(chalk.dim("  Use --no-figma to skip, or ensure Figma Desktop is running.\n"));
       }
     }
 

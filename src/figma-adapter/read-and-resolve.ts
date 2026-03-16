@@ -2,7 +2,7 @@
  * Convenience: fetch Figma components → convert to schemas → resolve names → resolve properties.
  */
 
-import type { FigmaAdapterConfig } from "./types.js";
+import type { FigmaConnection } from "./mcp-connection.js";
 import type { ComponentSchema } from "../schema/types.js";
 import type { ComponentPropertyMap } from "../shared/config.js";
 import { fetchComponents } from "./client.js";
@@ -18,13 +18,13 @@ export interface ReadFigmaOptions {
 /**
  * Read Figma components and return resolved schemas.
  *
- * Pipeline: fetch → convert → resolve names → resolve properties.
+ * Pipeline: fetch (bridge) → convert → resolve names → resolve properties.
  */
 export async function readFigmaSchemas(
-  config: FigmaAdapterConfig,
+  conn: FigmaConnection,
   options: ReadFigmaOptions,
 ): Promise<ComponentSchema[]> {
-  const { componentSets, components } = await fetchComponents(config);
+  const { componentSets, components } = await fetchComponents(conn);
   const schemas = figmaToSchemas(componentSets, components);
   const named = resolveSchemaNames(schemas, options.nameConfig);
   return resolveAllProperties(named, options.propertyMap);

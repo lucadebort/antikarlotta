@@ -17,6 +17,7 @@ import { flattenTokens } from "../../schema/tokens.js";
 import { tokensToFigmaVariables, figmaVariablesToTokens } from "../../figma-adapter/token-bridge.js";
 import { fetchVariables } from "../../figma-adapter/client.js";
 import { writeVariablesToFigma } from "../../figma-adapter/writer.js";
+import { connectFigma, disconnect } from "../figma-connect.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -138,16 +139,11 @@ tokensCommand
     const config = loadConfig(projectRoot);
     const tokenPath = config.tokenFile ?? "tokens.tokens.json";
 
-    if (!config.figmaFileKey) {
-      console.log(chalk.red("  No Figma file key configured.\n"));
-      return;
-    }
-
     console.log(chalk.dim("  Reading Figma variables..."));
 
-    const { variables, collections } = await fetchVariables({
-      fileKey: config.figmaFileKey,
-    });
+    const conn = await connectFigma(config.figmaFileKey);
+    const { variables, collections } = await fetchVariables(conn);
+    await disconnect(conn);
 
     if (variables.length === 0) {
       console.log(chalk.dim("\n  No variables found in Figma file.\n"));
@@ -193,11 +189,6 @@ tokensCommand
     const config = loadConfig(projectRoot);
     const tokenPath = config.tokenFile ?? "tokens.tokens.json";
 
-    if (!config.figmaFileKey) {
-      console.log(chalk.red("  No Figma file key configured.\n"));
-      return;
-    }
-
     const tokenFile = loadTokenFile(projectRoot, tokenPath);
     if (!tokenFile) {
       console.log(chalk.red(`\n  Token file not found: ${tokenPath}\n`));
@@ -229,20 +220,21 @@ tokensCommand
 
     console.log(chalk.dim("\n  Pushing to Figma..."));
 
-    // Read existing variables to determine create vs update
-    const { variables: existing, collections: existingCollections } = await fetchVariables({
-      fileKey: config.figmaFileKey,
-    });
+    // Connect and read existing variables to determine create vs update
+    const conn = await connectFigma(config.figmaFileKey);
+    const { variables: existing, collections: existingCollections } = await fetchVariables(conn);
 
     const existingCollMap = new Map(existingCollections.map((c) => [c.name, c.id]));
     const existingVarMap = new Map(existing.map((v) => [v.name, v.id]));
 
     const result = await writeVariablesToFigma(
-      { fileKey: config.figmaFileKey },
+      conn,
       figmaVars,
       existingCollMap,
       existingVarMap,
     );
+
+    await disconnect(conn);
 
     if (result.errors.length > 0) {
       console.log(chalk.red(`\n  Errors:`));

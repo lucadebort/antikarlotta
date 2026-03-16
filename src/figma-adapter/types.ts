@@ -93,5 +93,6 @@ export interface FigmaVariableCollection {
 
 export interface FigmaAdapterConfig {
   fileKey: string;
-  accessToken?: string; // falls back to FIGMA_ACCESS_TOKEN env
+  /** @deprecated No longer needed — figma-console connects directly to Figma Desktop. */
+  accessToken?: string;
 }

@@ -2,7 +2,7 @@
  * push command — read from one side, commit to schema, then apply to the other.
  *
  * gitma push figma-to-code  → read Figma → commit → apply to code
- * gitma push code-to-figma  → read code → commit → (apply to Figma — future)
+ * gitma push code-to-figma  → read code → commit → write to Figma via MCP
  */
 
 import { Command } from "commander";
@@ -15,7 +15,8 @@ import { readCodeComponents } from "../../code-adapter/reader.js";
 import { applyAndSave } from "../../code-adapter/writer.js";
 import { readFigmaSchemas } from "../../figma-adapter/read-and-resolve.js";
 import { formatDiff } from "../formatters/diff-printer.js";
-import { generateDesignerInstructions } from "../../figma-adapter/writer.js";
+import { applySchemaChangesToFigma, generateDesignerInstructions } from "../../figma-adapter/writer.js";
+import { connectFigma, disconnect } from "../figma-connect.js";
 import type { ComponentSchema } from "../../schema/types.js";
 
 export const pushCommand = new Command("push")
@@ -44,17 +45,14 @@ async function pushFigmaToCode(
   committed: ComponentSchema[],
   opts: { apply?: boolean; component?: string },
 ) {
-  if (!config.figmaFileKey) {
-    console.log(chalk.red("  No Figma file key configured. Run `gitma init --figma-key <key>`."));
-    process.exit(1);
-  }
-
   // Step 1: Read Figma
   console.log(chalk.dim("  Step 1/3: Reading Figma components..."));
+  const conn = await connectFigma(config.figmaFileKey);
   const figmaSchemas = await readFigmaSchemas(
-    { fileKey: config.figmaFileKey },
+    conn,
     { nameConfig: { nameMap: config.componentNameMap }, propertyMap: config.propertyMap },
   );
+  await disconnect(conn);
 
   // Step 2: Diff Figma vs committed
   let figmaChanges = diffSchemas(committed, figmaSchemas);
@@ -159,24 +157,48 @@ async function pushCodeToFigma(
     return;
   }
 
-  // Step 3: Commit code state and generate designer instructions
-  console.log(chalk.dim("\n  Step 3/3: Updating schema..."));
+  // Step 3: Commit code state and write to Figma via MCP
+  console.log(chalk.dim("\n  Step 3/3: Writing to Figma..."));
   saveSnapshot(projectRoot, "committed", codeComponents, "code");
 
-  // Generate instructions for the designer
-  const instructions = generateDesignerInstructions(changes);
+  // Connect to Figma and apply changes directly
+  const conn = await connectFigma(config.figmaFileKey);
 
-  if (instructions.length > 0) {
-    console.log(chalk.bold("\n  Designer instructions (apply in Figma):\n"));
-    for (const inst of instructions) {
-      console.log(chalk.blue(`  ${inst.componentName}:`));
-      for (const line of inst.instructions) {
-        console.log(chalk.dim(`    → ${line}`));
+  const writeResult = await applySchemaChangesToFigma(conn, changes);
+  await disconnect(conn);
+
+  if (writeResult.applied > 0) {
+    console.log(chalk.green(`\n  ${writeResult.applied} change(s) written to Figma.`));
+  }
+
+  // Show any errors or fallback instructions
+  if (writeResult.errors.length > 0) {
+    const variantErrors = writeResult.errors.filter((e) => e.includes("variant"));
+    const otherErrors = writeResult.errors.filter((e) => !e.includes("variant"));
+
+    if (otherErrors.length > 0) {
+      console.log(chalk.red("\n  Errors:"));
+      for (const err of otherErrors) {
+        console.log(chalk.red(`    - ${err}`));
       }
     }
-    console.log(chalk.dim("\n  These changes require manual application in Figma."));
-    console.log(chalk.dim("  Component properties cannot be modified via REST API.\n"));
-  } else {
-    console.log(chalk.green("\n  Schema updated from code.\n"));
+
+    if (variantErrors.length > 0) {
+      // Variant changes need manual intervention — generate instructions
+      const instructions = generateDesignerInstructions(
+        changes.filter((c) => c.target === "variant"),
+      );
+      if (instructions.length > 0) {
+        console.log(chalk.bold("\n  Manual steps needed (variant changes):"));
+        for (const inst of instructions) {
+          console.log(chalk.blue(`    ${inst.componentName}:`));
+          for (const line of inst.instructions) {
+            console.log(chalk.dim(`      → ${line}`));
+          }
+        }
+      }
+    }
   }
+
+  console.log();
 }

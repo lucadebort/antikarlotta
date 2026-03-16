@@ -7,7 +7,7 @@
 
 import { Command } from "commander";
 import chalk from "chalk";
-import { resolve, join } from "node:path";
+import { resolve } from "node:path";
 import { loadConfig } from "../../shared/config.js";
 import { loadSnapshot, saveSnapshot } from "../../diff-engine/snapshot.js";
 import { diffSchemas } from "../../diff-engine/differ.js";
@@ -15,6 +15,7 @@ import { readCodeComponents } from "../../code-adapter/reader.js";
 import { applyAndSave } from "../../code-adapter/writer.js";
 import { formatDiff } from "../formatters/diff-printer.js";
 import { readFigmaSchemas } from "../../figma-adapter/read-and-resolve.js";
+import { connectFigma, disconnect } from "../figma-connect.js";
 import type { ComponentSchema } from "../../schema/types.js";
 
 export const pullCommand = new Command("pull")
@@ -43,17 +44,14 @@ async function pullFromFigma(
   committed: ComponentSchema[],
   opts: { apply?: boolean; component?: string },
 ) {
-  if (!config.figmaFileKey) {
-    console.log(chalk.red("  No Figma file key configured. Run `gitma init --figma-key <key>`."));
-    process.exit(1);
-  }
-
   console.log(chalk.dim("  Reading Figma components..."));
 
+  const conn = await connectFigma(config.figmaFileKey);
   const figmaSchemas = await readFigmaSchemas(
-    { fileKey: config.figmaFileKey },
+    conn,
     { nameConfig: { nameMap: config.componentNameMap }, propertyMap: config.propertyMap },
   );
+  await disconnect(conn);
 
   let changes = diffSchemas(committed, figmaSchemas);
 
