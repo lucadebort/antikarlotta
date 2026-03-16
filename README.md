@@ -1,15 +1,22 @@
-# Gitma
+```
+  ______     __     ______   __    __     ______
+ /\  ___\   /\ \   /\__  _\ /\ "-./  \   /\  __ \
+ \ \ \__ \  \ \ \  \/_/\ \/ \ \ \-./\ \  \ \  __ \
+  \ \_____\  \ \_\    \ \_\  \ \_\ \ \_\  \ \_\ \_\
+   \/_____/   \/_/     \/_/   \/_/  \/_/   \/_/\/_/
+```
 
 Git-like bidirectional sync between Figma and code.
 
-Gitma keeps your design system in Figma and your component library in code perfectly aligned. When the designer changes a component in Figma, the developer sees the diff and pulls it into code. When the developer adds a prop, the designer gets instructions to update Figma. One source of truth, two tools, zero drift.
+Gitma keeps your design system in Figma and your component library in code perfectly aligned. When the designer changes a component in Figma, the developer sees the diff and pulls it into code. When the developer adds a prop, Gitma writes it directly to Figma. One source of truth, two tools, zero drift.
 
 ## Who is this for
 
 Designer-developer pairs working on component-based design systems. You need:
 
-- A Figma file with published components (variants, properties)
+- A Figma file with components (variants, properties) — published or not
 - A codebase with React/TypeScript components
+- Figma Desktop with the [Desktop Bridge plugin](https://github.com/nicholascooke/figma-console-mcp) installed
 - Both sides wanting to stay in sync without manual checking
 
 ## How it works
@@ -25,7 +32,7 @@ Think of it like git, but between Figma and code:
 - `gitma status` — what's out of sync?
 - `gitma diff` — show me the details
 - `gitma pull` — bring changes from one side
-- `gitma push` — sync from one side to the other
+- `gitma push` — sync from one side to the other (writes directly to Figma)
 - `gitma resolve` — handle conflicts when both sides changed
 
 ## Quick start
@@ -37,21 +44,21 @@ Think of it like git, but between Figma and code:
 pnpm add -D gitma
 ```
 
-### 2. Set up Figma access
+### 2. Set up the Figma Desktop Bridge
 
-Create a Figma Personal Access Token at **Figma → Settings → Security → Personal access tokens**.
+Gitma connects directly to Figma Desktop — no API token needed.
 
-Scopes needed:
-- `file_content:read` — read components
-- `library_assets:read` — read published components
-- `file_variables:read` — read tokens (Enterprise only)
-- `file_variables:write` — write tokens (Enterprise only)
+1. Install the [Desktop Bridge plugin](https://github.com/nicholascooke/figma-console-mcp):
+   ```bash
+   npx figma-console-mcp@latest --print-path
+   ```
+   This prints the manifest path. In Figma Desktop: **Plugins → Development → Import plugin from manifest** and select it.
 
-Add it to your project's `.env`:
+2. Open your design file in Figma Desktop.
 
-```
-FIGMA_ACCESS_TOKEN=figd_xxxxxxxxxxxxx
-```
+3. Run the bridge: **Plugins → Development → Figma Desktop Bridge**.
+
+The plugin auto-discovers Gitma when it starts. If Gitma is already running, reload the plugin.
 
 ### 3. Initialize
 
@@ -103,9 +110,9 @@ gitma diff --component Button  # diff for a specific component
 gitma push figma-to-code          # dry run (preview)
 gitma push figma-to-code --apply  # do it
 
-# Developer changed code → update schema + show designer instructions
+# Developer changed code → write changes to Figma
 gitma push code-to-figma          # dry run
-gitma push code-to-figma --apply  # do it
+gitma push code-to-figma --apply  # do it (writes props/states directly to Figma)
 ```
 
 ### Granular control
@@ -196,6 +203,32 @@ Figma properties often don't match code props 1:1. Configure per component:
 - **`variantToState`** — convert a Figma variant to boolean states. Figma's `state` variant with value `"isDisabled"` becomes code's `disabled: boolean`. `null` values are skipped (Figma-only states like hover).
 - **`ignore`** — skip these Figma properties entirely.
 
+## How Gitma connects to Figma
+
+Gitma uses the [figma-console-mcp](https://github.com/nicholascooke/figma-console-mcp) Desktop Bridge to communicate with Figma. This means:
+
+- **No API token needed** — connects directly to the open file
+- **Reads unpublished components** — no need to publish your library first
+- **Writes directly to Figma** — `push code-to-figma` adds/removes component properties in real time
+- **Requires Figma Desktop** — the bridge plugin must be running
+
+### What Gitma can write to Figma
+
+| Change | Automated | Manual |
+|--------|-----------|--------|
+| Add boolean property | Yes | |
+| Add text property | Yes | |
+| Add instance swap (slot) | Yes | |
+| Remove any property | Yes | |
+| Add/remove variant values | | Yes (requires new child components) |
+| Create/update/delete variables | Yes | |
+
+Variant value changes are reported as instructions — the designer creates the new variant combination in Figma.
+
+### Connection notes
+
+Gitma starts a lightweight WebSocket server on a port in the 9223-9232 range. The bridge plugin auto-discovers servers at startup. If you start Gitma after the plugin, reload the plugin in Figma (**Plugins → Run last plugin**).
+
 ## What Gitma changes in your code
 
 When you run `gitma pull code --apply`, Gitma modifies your component files:
@@ -247,7 +280,6 @@ your-project/
     config.json       # project config (committed to git)
     snapshots/        # schema states (gitignored)
     staging/          # staged changes (gitignored)
-  .env                # FIGMA_ACCESS_TOKEN (gitignored)
   src/
     components/       # your React components
   tokens.tokens.json  # W3C design tokens (optional)

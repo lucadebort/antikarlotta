@@ -1,4 +1,4 @@
-# Antikarlotta
+# Gitma
 
 ## Business
 **Team:** 1 designer + 1 developer
@@ -9,7 +9,7 @@
 **Need:** Any change to design or code is detected, compared against a shared truth, and either synced or flagged for review — drift becomes impossible
 
 ## Stack
-Node.js + TypeScript (CLI tool), ts-morph (AST), Figma MCP + REST API, Vitest
+Node.js + TypeScript (CLI tool), ts-morph (AST), figma-console-mcp (Desktop Bridge), Vitest
 
 ## EIID
 
