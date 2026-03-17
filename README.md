@@ -92,8 +92,8 @@ Claude reads a component's structure, visual properties, and token bindings, the
 
 ## What you need
 
-- [Claude Code](https://claude.ai/claude-code) with figma-console MCP server
-- Figma Desktop with the bridge plugin
+- [Claude Code](https://claude.ai/claude-code) with [figma-console MCP server](https://www.npmjs.com/package/figma-console-mcp)
+- [Figma Desktop](https://www.figma.com/downloads/) with the [bridge plugin](https://www.npmjs.com/package/figma-console-mcp#figma-plugin)
 - React/TypeScript components
 
 No API tokens. No npm packages in your project. No CLI to learn.
