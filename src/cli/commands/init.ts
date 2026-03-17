@@ -61,8 +61,7 @@ export const initCommand = new Command("init")
       }
     }
 
-    console.log(chalk.bold("\n  Welcome to Gitma\n"));
-    console.log(chalk.dim("  Bidirectional sync between Figma and code.\n"));
+    console.log(chalk.dim("  Setting up your project...\n"));
 
     // Interactive or flag-based
     const isInteractive = !opts.figmaKey;

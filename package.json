@@ -1,13 +1,11 @@
 {
   "name": "gitma",
   "version": "0.1.0",
-  "description": "Bidirectional Figma-code sync with a canonical component schema",
+  "description": "Bidirectional Figma ↔ code sync. Type /gitma in Claude Code — zero config, zero drift.",
   "type": "module",
-  "bin": {
-    "gitma": "./dist/cli/index.js"
-  },
+  "private": true,
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/preview/template.html dist/preview/template.html",
     "dev": "tsx src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -17,18 +15,6 @@
   "engines": {
     "node": ">=20"
   },
-  "files": [
-    "dist"
-  ],
-  "keywords": [
-    "figma",
-    "design-tokens",
-    "sync",
-    "components",
-    "cli"
-  ],
-  "author": "lucadebort (https://lucadebort.com)",
-  "license": "ISC",
   "packageManager": "pnpm@10.25.0",
   "dependencies": {
     "chalk": "^5.6.2",

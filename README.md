@@ -116,6 +116,95 @@ No API tokens. No npm packages in your project. No CLI to learn.
 | Removed prop | `deleteComponentProperty()` |
 | New variant value | Clone + rename + reposition |
 
+## How it works
+
+### The schema: a shared contract between Figma and code
+
+Gitma introduces a **canonical schema** as the single source of truth. Neither Figma nor code is "right" — they both get compared against this shared contract.
+
+```
+Figma ──reader──→ ComponentSchema[] ←──reader── Code
+                        ↑
+                    SNAPSHOT
+                 (.gitma/snapshots/committed.json)
+```
+
+The schema is a neutral format that captures what both sides can represent: props, variants, slots, states, and token references. It lives in `.gitma/snapshots/` as JSON files.
+
+| Snapshot | What it is |
+|----------|-----------|
+| `committed.json` | The last agreed-upon state — the **baseline** |
+| `figma.json` | Current state read from Figma |
+| `code.json` | Current state read from TypeScript |
+
+The workflow mirrors git:
+
+1. **status** — read both sides, convert to schema, compare against `committed`
+2. **diff** — show additions, removals, modifications per component
+3. **stage** — choose which changes to accept
+4. **commit** — save the new `committed.json` as the new baseline
+5. **pull/push** — apply accepted changes to the other side
+
+When both sides change the same field (e.g., designer renames a variant while developer renames the same variant differently), Gitma detects a **conflict** and asks you to resolve it — just like git.
+
+### What Figma owns vs. what code owns
+
+Figma components are primarily **visual**: layout, colors, spacing, typography, variant options, slot structure. Code components own **behavior**: event handlers, validation logic, async state, business rules.
+
+Gitma respects this boundary. The schema has explicit prop types that separate the two worlds:
+
+| Prop type | Synced to Figma? | Example |
+|-----------|-----------------|---------|
+| `string` | Yes | `label`, `placeholder` |
+| `number` | Yes | `maxLength`, `columns` |
+| `boolean` | Yes | `disabled`, `loading` |
+| `enum` | Yes | `size: "sm" \| "md" \| "lg"` |
+| `node` | Yes (instance swap) | `icon`, `children` |
+| `callback` | No — code only | `onClick`, `onSubmit` |
+| `object` | No — code only | `style`, `config` |
+
+When you add an `onClick` handler in code, Gitma records it in the schema but never tries to push it to Figma. When a designer adds a new variant value in Figma, Gitma proposes adding it to your TypeScript types — but never generates behavior logic.
+
+The rule: **Figma decides how it looks. Code decides how it works. The schema tracks both.**
+
+## FAQ
+
+### What is the "source of truth"?
+
+Neither Figma nor code. The source of truth is `committed.json` — the last version both sides agreed on. Think of it as the `main` branch in git. Figma and code are like two feature branches that get compared against it.
+
+### What happens if I only have Figma, no code yet?
+
+Gitma reads your Figma file, generates a schema, and that becomes your first `committed.json`. From there you can generate code (`/gitma generate ComponentName`) or just use the preview to explore your design system.
+
+### What happens if I only have code, no Figma?
+
+Same flow in reverse. Gitma reads your TypeScript components, generates a schema, and you can push to Figma when ready.
+
+### Does Gitma generate my component's behavior?
+
+No. Gitma syncs the **interface** (props, variants, slots, states, tokens) — not the implementation. Your `onClick` handlers, form validation, API calls, and business logic are yours. Gitma will never touch your JSX or component body.
+
+### What if the designer and developer change the same thing?
+
+Gitma detects it as a **conflict**. For example, if the designer changes `size` values from `sm/md/lg` to `xs/sm/md/lg/xl` while the developer changes them to `small/medium/large`, Gitma shows both versions and asks you to pick one (or merge manually).
+
+### How are design tokens handled?
+
+Gitma uses the [W3C Design Tokens Community Group format](https://www.designtokens.org/) (`.tokens.json`). Tokens are extracted from Figma variables and stored alongside the schema. Each component's schema includes `tokenRefs` — explicit links between a component property (e.g., `background-color`) and a token path (e.g., `color.primary.500`).
+
+### Can I use this without React?
+
+The schema is framework-agnostic. The code adapter currently reads React/TypeScript, but the schema format (props, variants, slots, states) maps to any component model — Vue, Svelte, Web Components. Adapters for other frameworks can be added.
+
+### What if my Figma component names don't match my code names?
+
+Use the `componentNameMap` in `.gitma/config.json` to map between them. Similarly, `propertyMap` handles prop name differences (e.g., Figma's `buttonLabel` maps to code's `children`).
+
+### Is there a CI/CD integration?
+
+Not yet. The current workflow is interactive via Claude Code. A future `gitma check` command could run in CI to fail builds when drift exceeds a threshold.
+
 ## Configuration
 
 On first run, `/gitma` creates `.gitma/config.json`:
