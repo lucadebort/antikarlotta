@@ -8,7 +8,7 @@
   figma ↔ code. zero drift.
 ```
 
-Gitma keeps your Figma components and your React codebase in perfect sync. Designer changes a variant? You see the diff. Developer adds a prop? Gitma writes it to Figma. No copy-paste, no "did you update the component?", no drift.
+Gitma keeps your Figma components and your codebase in perfect sync. Designer changes a variant? You see the diff. Developer adds a prop? Gitma writes it to Figma. No copy-paste, no "did you update the component?", no drift.
 
 ## Setup (once)
 
@@ -41,7 +41,7 @@ Open Figma Desktop with your file. Run the bridge plugin. Then in Claude Code:
 Claude reads Figma, compares with your code, shows what's different, and asks what you want to do.
 
 ```
-Figma file: "📖 Design System" (32 components)
+Figma file: "Design System" (32 components)
 Code: src/components/ (18 components)
 
 ✓ 15 in sync
@@ -62,15 +62,16 @@ Want me to pull from Figma, push to Figma, or show details?
 /gitma pull figma       → Figma changes → apply to code
 /gitma push code        → code changes → apply to Figma
 /gitma diff             → detailed diff both directions
-/gitma generate Badge   → generate React component from Figma (with tokens)
-/gitma preview          → generate interactive component documentation
+/gitma generate Badge   → generate component from Figma (with tokens)
+/gitma preview          → generate interactive design system preview
+/gitma update           → update /gitma command to latest version
 ```
 
 ## What it does
 
 ### Pull from Figma → Code
 
-Claude updates your TypeScript interfaces, function params, and types to match Figma. Surgical edits, never touches your JSX.
+Claude updates your component interfaces, types, and props to match Figma. Surgical edits — never touches your template/JSX/render logic.
 
 ### Push from Code → Figma
 
@@ -78,23 +79,24 @@ Claude writes new props, states, and variant values directly to your Figma file.
 
 ### Generate from Figma
 
-Claude reads a component's structure, visual properties, and token bindings, then generates a complete React component with token-based styling.
+Claude reads a component's structure, visual properties, and token bindings, then generates a complete component matching your project's stack and conventions.
 
 ### Interactive preview
 
-`/gitma preview` generates a self-contained HTML page with all your components:
+`/gitma preview` generates a self-contained HTML page with your entire design system:
 
 - **Component list** with navigation
-- **Live preview** with interactive controls (variant chips, boolean toggles, text inputs, icon swap grids)
+- **Real component preview** rendered with actual CSS from Figma tokens, with interactive controls (variant chips, boolean toggles, text inputs)
 - **Inspect panel** showing Design, Layout, and CSS with Figma token references
-- **Code dock** with copyable React JSX
-- **Figma link** per component to jump to the source
+- **Code dock** with copyable component code
+- **Design tokens page** with all variables, color scales, Light/Dark mode toggle
+- **Progress indicator** during generation (`✅ Badge 1/12, ⏳ Button 2/12...`)
 
 ## What you need
 
 - [Claude Code](https://claude.ai/claude-code) with [figma-console MCP server](https://www.npmjs.com/package/figma-console-mcp)
 - [Figma Desktop](https://www.figma.com/downloads/) with the [bridge plugin](https://www.npmjs.com/package/figma-console-mcp#figma-plugin)
-- React/TypeScript components
+- A component-based codebase (React, Vue, Svelte, or any framework)
 
 No API tokens. No npm packages in your project. No CLI to learn.
 
@@ -102,11 +104,11 @@ No API tokens. No npm packages in your project. No CLI to learn.
 
 | From Figma | To Code |
 |-----------|---------|
-| Variant property (enum) | Union type + prop |
+| Variant property (enum) | Union type / prop |
 | Boolean property | `boolean` prop or state |
 | Text property | `string` prop |
-| Instance swap | `ReactNode` slot |
-| Variant values (sm, md, lg) | Union type values |
+| Instance swap | Slot / child component |
+| Variant values (sm, md, lg) | Type values |
 
 | From Code | To Figma |
 |-----------|---------|
@@ -135,7 +137,8 @@ The schema is a neutral format that captures what both sides can represent: prop
 |----------|-----------|
 | `committed.json` | The last agreed-upon state — the **baseline** |
 | `figma.json` | Current state read from Figma |
-| `code.json` | Current state read from TypeScript |
+
+Code is read live from your source files each time — no snapshot needed.
 
 The workflow mirrors git:
 
@@ -163,7 +166,7 @@ Gitma respects this boundary. The schema has explicit prop types that separate t
 | `callback` | No — code only | `onClick`, `onSubmit` |
 | `object` | No — code only | `style`, `config` |
 
-When you add an `onClick` handler in code, Gitma records it in the schema but never tries to push it to Figma. When a designer adds a new variant value in Figma, Gitma proposes adding it to your TypeScript types — but never generates behavior logic.
+When you add an `onClick` handler in code, Gitma records it in the schema but never tries to push it to Figma. When a designer adds a new variant value in Figma, Gitma proposes adding it to your types — but never generates behavior logic.
 
 The rule: **Figma decides how it looks. Code decides how it works. The schema tracks both.**
 
@@ -179,11 +182,11 @@ Gitma reads your Figma file, generates a schema, and that becomes your first `co
 
 ### What happens if I only have code, no Figma?
 
-Same flow in reverse. Gitma reads your TypeScript components, generates a schema, and you can push to Figma when ready.
+Same flow in reverse. Gitma reads your components, generates a schema, and you can push to Figma when ready.
 
 ### Does Gitma generate my component's behavior?
 
-No. Gitma syncs the **interface** (props, variants, slots, states, tokens) — not the implementation. Your `onClick` handlers, form validation, API calls, and business logic are yours. Gitma will never touch your JSX or component body.
+No. Gitma syncs the **interface** (props, variants, slots, states, tokens) — not the implementation. Your event handlers, form validation, API calls, and business logic are yours. Gitma will never touch your template/JSX/render logic.
 
 ### What if the designer and developer change the same thing?
 
@@ -195,11 +198,19 @@ Gitma uses the [W3C Design Tokens Community Group format](https://www.designtoke
 
 ### Can I use this without React?
 
-The schema is framework-agnostic. The code adapter currently reads React/TypeScript, but the schema format (props, variants, slots, states) maps to any component model — Vue, Svelte, Web Components. Adapters for other frameworks can be added.
+Yes. Gitma auto-detects your stack (React, Vue, Svelte, Angular, SolidJS) and matches your project's conventions. The schema format is framework-agnostic — props, variants, slots, and states map to any component model.
 
 ### What if my Figma component names don't match my code names?
 
 Use the `componentNameMap` in `.gitma/config.json` to map between them. Similarly, `propertyMap` handles prop name differences (e.g., Figma's `buttonLabel` maps to code's `children`).
+
+### How do I update Gitma?
+
+```
+/gitma update
+```
+
+This downloads the latest command file from GitHub. Gitma also checks for updates automatically on startup and notifies you if a new version is available.
 
 ### Is there a CI/CD integration?
 
@@ -207,14 +218,27 @@ Not yet. The current workflow is interactive via Claude Code. A future `gitma ch
 
 ## Configuration
 
-On first run, `/gitma` creates `.gitma/config.json`:
+On first run, `/gitma` asks for your Figma file URL and detects your component paths, then creates `.gitma/config.json`:
 
 ```json
 {
   "figmaFileKey": "your-figma-file-key",
-  "componentGlobs": ["src/components/**/*.tsx"]
+  "componentGlobs": ["src/components/**/*.tsx"],
+  "tokenFile": "tokens.tokens.json",
+  "tokenFormat": "css-vars",
+  "formatCommand": "npx prettier --write"
 }
 ```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `figmaFileKey` | No | Figma file key (extracted from URL) |
+| `componentGlobs` | Yes | Glob patterns to find component files |
+| `tokenFile` | No | Path to `.tokens.json` (W3C format) |
+| `tokenFormat` | No | How tokens are used in code: `css-vars` or `tailwind` |
+| `formatCommand` | No | Run after code changes (e.g., Prettier) |
+| `componentNameMap` | No | Figma name → code name mapping |
+| `propertyMap` | No | Per-component prop/variant name mapping |
 
 ### Name mapping
 
